@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Sản Phẩm - Nhà Thuốc An Tâm{% endblock %}
+
+{% block extra_css %}
+<style>
+    .products-header {
+        background: var(--light);
+        padding: 30px 0;
+        margin-bottom: 30px;
+    }
+    
+    .filter-sidebar {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .filter-group {
+        margin-bottom: 20px;
+    }
+    
+    .filter-group h4 {
+        color: var(--primary);
+        margin-bottom: 10px;
+        font-size: 16px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Header Products -->
+    <section class="products-header">
+        <div class="container">
+            <h1>Danh Mục Sản Phẩm</h1>
+            <p>Khám phá các sản phẩm chăm sóc sức khỏe chất lượng</p>
+        </div>
+    </section>
+
+    <div class="container">
+        <div class="main-content">
+            <!-- Filter Sidebar -->
+            <aside class="sidebar filter-sidebar">
+                <div class="filter-group">
+                    <h4>Danh Mục</h4>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="category1">
+                        <label class="form-check-label" for="category1">Thực phẩm chức năng</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="category2">
+                        <label class="form-check-label" for="category2">Thuốc</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="category3">
+                        <label class="form-check-label" for="category3">Thiết bị y tế</label>
+                    </div>
+                </div>
+                
+                <div class="filter-group">
+                    <h4>Giá</h4>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="price" id="price1">
+                        <label class="form-check-label" for="price1">Dưới 100.000đ</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="price" id="price2">
+                        <label class="form-check-label" for="price2">100.000đ - 300.000đ</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="price" id="price3">
+                        <label class="form-check-label" for="price3">Trên 300.000đ</label>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Products Grid -->
+            <div class="content">
+                <section class="section">
+                    <div class="section-header">
+                        <h2>Tất Cả Sản Phẩm</h2>
+                        <div>
+                            <select class="form-select" style="width: auto; display: inline-block;">
+                                <option>Sắp xếp theo: Phổ biến</option>
+                                <option>Giá: Thấp đến Cao</option>
+                                <option>Giá: Cao đến Thấp</option>
+                                <option>Đánh giá cao</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="product-grid">
+                        <!-- Product cards sẽ được thêm ở đây -->
+                        <div class="product-card">
+                            <div class="product-image">
+                                <i class="fas fa-capsules fa-3x"></i>
+                            </div>
+                            <div class="product-info">
+                                <div class="product-category">Vitamin</div>
+                                <div class="product-name">Vitamin C 1000mg</div>
+                                <div class="product-price">
+                                    <span class="current-price">125.000đ</span>
+                                    <span class="original-price">150.000đ</span>
+                                    <span class="discount-badge">-17%</span>
+                                </div>
+                                <div class="product-actions">
+                                    <button class="add-to-cart" data-product-id="1">
+                                        Thêm giỏ hàng
+                                    </button>
+                                    <button class="view-details">Chi tiết</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Thêm các sản phẩm khác -->
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+{% endblock %}
