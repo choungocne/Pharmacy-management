@@ -1,0 +1,70 @@
+:root{
+  --bg:#f5f7fb;
+  --blue:#0b3fd1;
+  --gray:#6b7280;
+  --card:#fff;
+  --border:#e3e8f0;
+}
+body{
+  font-family:'Montserrat',sans-serif;
+  background:var(--bg);
+  color:#111;
+  margin:0;
+  line-height:1.6;
+}
+.container{width:min(1200px,92%);margin-inline:auto}
+
+/* breadcrumb */
+.breadcrumb{
+  font-size:14px;padding:20px 5%;color:var(--gray)
+}
+.breadcrumb a{color:var(--blue);text-decoration:none;font-weight:600}
+
+/* search */
+.search-section{background:#eef1f7;padding:40px 0}
+.search-box{
+  width:min(1200px,92%);
+  background:var(--card);
+  border-radius:14px;
+  box-shadow:0 10px 25px -20px rgba(0,0,0,.15);
+  margin-inline:auto;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:36px 40px;gap:40px;
+}
+.search-box h1{font-size:clamp(20px,2vw + 10px,30px);margin:0 0 14px;color:var(--blue)}
+.search-bar{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--border);border-radius:999px;
+  padding:8px 16px;background:#fff;max-width:420px;
+}
+.search-bar input{
+  flex:1;border:none;outline:none;font-size:15px;
+  background:transparent;
+}
+.search-bar button{
+  background:none;border:none;cursor:pointer;
+}
+.filters{margin-top:10px;display:flex;gap:20px;font-size:15px;color:var(--gray)}
+.filters input{margin-right:6px}
+.search-img img{width:160px;max-width:100%}
+
+/* category */
+.category-section{padding:50px 0}
+.category-section h2{color:var(--blue);margin-bottom:24px;font-size:24px}
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:20px;
+}
+.card{
+  background:var(--card);
+  border-radius:10px;
+  padding:12px;
+  display:flex;align-items:center;gap:14px;
+  box-shadow:0 10px 30px -20px rgba(0,0,0,.12);
+  transition:.25s ease;
+}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 40px -18px rgba(0,0,0,.25)}
+.card img{width:60px;height:60px;object-fit:contain}
+.card .text h3{margin:0;font-size:16px;color:#111}
+.card .text p{margin:4px 0 0;font-size:14px;color:var(--gray)}

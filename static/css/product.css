@@ -1,0 +1,163 @@
+.filter-section {
+            margin-bottom: 25px;
+        }
+.filter-section h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+            color: #2c3e50;
+        }
+
+.filter-option {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+.filter-option input {
+            margin-right: 10px;
+        }
+
+.filter-option label {
+            cursor: pointer;
+        }
+
+        .price-range {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Main content - Danh mục và sản phẩm */
+        .main-content {
+            width: 75%;
+        }
+
+        .category-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .category-section h2 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 24px;
+        }
+
+        .categories {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .category-item {
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .category-item:hover {
+            background-color: #f0f8ff;
+            border-color: #3498db;
+        }
+
+        .category-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .product-count {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        /* Products section */
+        .products-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .sort-options {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .sort-option {
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .sort-option.active {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .product-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .product-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            transition: all 0.3s;
+        }
+
+        .product-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .product-name {
+            font-weight: bold;
+            margin-bottom: 10px;
+            height: 40px;
+            overflow: hidden;
+        }
+
+        .product-price {
+            color: #e74c3c;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .product-unit {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .buy-button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+
+        .buy-button:hover {
+            background-color: #27ae60;
+        }
+
+        .note {
+            color: #e74c3c;
+            font-style: italic;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #fff8e1;
+            border-radius: 4px;
+        }
