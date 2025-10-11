@@ -1,8 +1,0 @@
-Django==4.2.7
-django-crispy-forms==2.0
-crispy-bootstrap5==0.7
-Pillow==10.0.1
-django-filter==23.3
-psycopg2-binary==2.9.7
-# Hoặc cho MySQL:
-# mysqlclient==2.1.1

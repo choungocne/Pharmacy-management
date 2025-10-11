@@ -1376,7 +1376,24 @@ footer {
     position: relative;
     z-index: 2;
 }
-
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 8px 30px -18px rgba(0,0,0,.2);
+  transition: 0.25s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 40px -18px rgba(0,0,0,.25);
+}
+.card:hover .icon {
+  color: #007bff;
+  transform: scale(1.15);
+}
 .category-name {
     font-size: 16px;
     font-weight: 600;
