@@ -26,7 +26,7 @@
         </div>
       </div>
       <div class="search-img">
-        <img src="static/img/thuoc.webp" alt="pharmacist illustration">
+        <img src="static/img/pngtree-simple-pill-icon-vector-art-illustration-png-image_15500175.png" alt="pharmacist illustration">
       </div>
     </div>
   </section>

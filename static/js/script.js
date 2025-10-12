@@ -543,3 +543,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ... phần code còn lại
 });
+// Xử lý các nút lọc và sắp xếp
+document.addEventListener("DOMContentLoaded", function () {
+  const sortButtons = document.querySelectorAll(".sort-options button");
+  sortButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      sortButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+
+  // Toggle mở rộng các nhóm lọc
+  const filterTitles = document.querySelectorAll(".filter-group h4");
+  filterTitles.forEach(title => {
+    title.addEventListener("click", () => {
+      title.nextElementSibling.classList.toggle("collapsed");
+    });
+  });
+});
