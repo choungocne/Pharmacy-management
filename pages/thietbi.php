@@ -5,7 +5,7 @@
 <section class="featured-categories-section">
     <div class="container">
         <div class="section-header">
-            <h2>Thực phẩm chức năng</h2>
+            <h2>Thiết bị y tế</h2>
         </div>
         <div class="categories-grid">
             <!-- Category 1 -->
