@@ -48,10 +48,14 @@ $offset = ($page - 1) * $perPage;
 /* ===== DATA PAGE ===== */
 $sql = "
 SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam,
-       COALESCE(sp.hinhsp, '/Pharmacy-management/uploads/sp/placeholder.jpg') AS image,
+       REPLACE(
+           COALESCE(sp.hinhsp, '/Pharmacy-management/uploads/sp/placeholder.jpg'),
+           '/Pharmacy-management/',
+           '/pharmacy-management/'
+       ) AS image,
        dm.tendm, dv.tendv,
        SUM(CASE WHEN lh.hsd < CURDATE()  AND lh.sl>0 THEN lh.sl ELSE 0 END) AS sl_het_han,
-       MIN(CASE WHEN lh.sl>0 THEN lh.hsd END)                               AS hsd_gan_nhat,
+       MIN(CASE WHEN lh.sl>0 THEN lh.hsd END)                           AS hsd_gan_nhat,
        SUM(lh.sl) AS ton
 FROM sanpham sp
 LEFT JOIN danhmuc  dm ON dm.madm=sp.madm
@@ -95,7 +99,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
   <?php $active='products'; include __DIR__.'/partials/header.php'; ?>
 
   <main class="flex-1 overflow-y-auto relative z-10">
-    <!-- Top bar -->
     <header class="sticky top-0 z-20 glass border-b border-slate-200">
       <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <h1 class="text-3xl font-extrabold tracking-tight">Quản lý Sản phẩm</h1>
@@ -118,7 +121,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
     </header>
 
     <section class="max-w-7xl mx-auto px-6 pt-6 pb-2">
-      <!-- Stat cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div class="glass rounded-2xl p-5 stat fade-in">
           <div class="text-slate-500">Tổng số sản phẩm</div>
@@ -138,7 +140,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
         </div>
       </div>
 
-      <!-- Chips -->
       <div class="flex flex-wrap items-center gap-2 mb-4">
         <a href="<?=build_url('',0,1,$perPage)?>" class="pill px-3 py-1.5 rounded-full bg-white hover:bg-slate-50">Tất cả</a>
         <a href="<?=build_url('', $dm, 1, $perPage)?>" class="pill px-3 py-1.5 rounded-full bg-white hover:bg-slate-50">Xoá tìm</a>
@@ -146,7 +147,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
         <span class="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 pill">Trang <?=$page?>/<?=$pages?></span>
       </div>
 
-      <!-- List -->
       <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <?php foreach($rows as $r):
           $badge='';
@@ -160,7 +160,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
             }
           }
           $low = ($r['ton']!==null && (int)$r['ton']>0 && (int)$r['ton'] <= $lowThreshold)
-                   ? '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-violet-100 text-violet-700">Tồn thấp</span>' : '';
+                  ? '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-violet-100 text-violet-700">Tồn thấp</span>' : '';
           $price=(float)$r['giaban']; $sale=(float)$r['giagiam'];
         ?>
         <div class="glass rounded-2xl p-4 card fade-in border border-slate-200/70">
@@ -189,7 +189,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
                 <?php endif; ?>
               </div>
               <div class="mt-3 flex gap-2">
-                <a href="/Pharmacy-management/product_detail.php?masp=<?=$r['masp']?>"
+                <a href="/pharmacy-management/product_detail.php?masp=<?=$r['masp']?>"
                    class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm transition">Xem</a>
                 <a href="#"
                    class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</a>
@@ -200,7 +200,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
         <?php endforeach; ?>
       </div>
 
-      <!-- Pagination -->
       <div class="mt-8 flex items-center justify-between">
         <div class="text-sm text-slate-600">
           Hiển thị
@@ -242,7 +241,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
   </main>
 </div>
 
-<!-- Count-up & reveal -->
 <script>
 document.querySelectorAll('[data-count]').forEach(el=>{
   const target=+el.dataset.count; let v=0, step=Math.max(1, Math.round(target/30));

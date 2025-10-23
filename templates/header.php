@@ -1,31 +1,27 @@
 <?php
-// File: templates/header.php
+// --- Kết nối CSDL ---
+$pdo = new PDO(
+  'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
+  [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
+);
 
-// 1. Kết nối CSDL và lấy dữ liệu menu (logic giữ nguyên)
-include_once __DIR__ . '/../db.php';
 
-$menu_items = [];
-try {
-    $pdo = pdo();
-    $stmt1 = $pdo->query("SELECT madm1, code, tendm1 FROM danhmuc_cap1 ORDER BY madm1 ASC");
-    $danhmuc_cap1 = $stmt1->fetchAll();
-    $stmt2 = $pdo->query("SELECT code, tendm2, icon_url, madm1 FROM danhmuc_cap2 ORDER BY tendm2 ASC");
-    $danhmuc_cap2 = $stmt2->fetchAll();
-
-    foreach ($danhmuc_cap1 as $dm1) {
-        $children = [];
-        foreach ($danhmuc_cap2 as $dm2) {
-            if ($dm2['madm1'] == $dm1['madm1']) {
-                $children[] = ['code' => $dm2['code'], 'name' => $dm2['tendm2'], 'icon' => $dm2['icon_url']];
-            }
-        }
-        $menu_items[] = ['code' => $dm1['code'], 'name' => $dm1['tendm1'], 'children' => $children];
-    }
-} catch (PDOException $e) {
-    die("Lỗi truy vấn menu: " . $e->getMessage());
-}
-$base_url = '/Pharmacy-management';
+// --- Lấy danh mục cấp 1 ---
+$sql_lv1 = "SELECT * FROM danhmuc WHERE cap = 1 ORDER BY madm";
+$stmt1 = $pdo->query($sql_lv1);
+$menu_lv1 = $stmt1->fetchAll(PDO::FETCH_ASSOC);
+$href_map = [
+    'Thực phẩm chức năng' => 'base.php?page=thucpham',
+    'Thuốc'               => 'base.php?page=search',
+    'Thiết bị y tế'       => 'base.php?page=thietbi',
+    'Tra cứu bệnh'        => 'base.php?page=search',
+    'Bệnh & Góc sức khỏe'=> 'base.php?page=suckhoe',
+    'Hệ thống nhà thuốc'  => 'base.php?page=about'
+];
 ?>
+
+
+
 
 <div class="header-bar">
     <div class="header-bar-content">
@@ -64,32 +60,29 @@ $base_url = '/Pharmacy-management';
 <nav class="main-nav">
     <div class="nav-container">
         <ul class="nav-menu">
-            <?php foreach ($menu_items as $item): ?>
-                <li class="nav-item">
-                    <?php
-                        // Link mặc định sẽ trỏ đến trang danh mục chung
-                        $link = "base.php?page=danhmuc&code=" . urlencode($item['code']);
+            <?php foreach ($menu_lv1 as $lv1): ?>
+                <?php
+                // Lấy danh mục cấp 2
+                $stmt2 = $pdo->prepare("SELECT * FROM danhmuc WHERE parent_id = ? ORDER BY madm");
+                $stmt2->execute([$lv1['madm']]);
+                $menu_lv2 = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+                ?>
 
-                        // Gán link tùy chỉnh cho các trang đặc biệt
-                        if ($item['code'] === 'TP_CHUC_NANG') $link = "base.php?page=thucpham";
-                        elseif ($item['code'] === 'HE_THONG_NT') $link = "base.php?page=about";
-                        elseif ($item['code'] === 'THUOC') $link = "base.php?page=search";
-                        elseif ($item['code'] === 'THIET_BI_Y_TE') $link = "base.php?page=thietbi";
-                        elseif ($item['code'] === 'BENH_GOC_SK') $link = "base.php?page=suckhoe";
-                        
-                        // Thêm các trang khác nếu có, ví dụ:
-                        // elseif ($item['code'] === 'THUOC') $link = "base.php?page=thuoc";
-                    ?>
-                    <a href="<?= $base_url ?>/<?= $link ?>">
-                        <?= htmlspecialchars($item['name']) ?>
-                        <?php if (!empty($item['children'])): ?><i class="fas fa-chevron-down"></i><?php endif; ?>
+                <li class="nav-item">
+                    <a href="<?= htmlspecialchars($href_map[$lv1['tendm']] ?? '#') ?>">
+                        <?= htmlspecialchars($lv1['tendm']) ?>
+                        <?php if ($menu_lv2): ?><i class="fas fa-chevron-down"></i><?php endif; ?>
                     </a>
-                    <?php if (!empty($item['children'])): ?>
+
+                    <?php if ($menu_lv2): ?>
                         <div class="dropdown-menu">
-                            <?php foreach ($item['children'] as $child): ?>
-                                <a href="<?= $base_url ?>/base.php?page=danhmuc&code=<?= urlencode($child['code']) ?>" class="dropdown-item">
-                                    <?php if (!empty($child['icon'])): ?><img src="<?= $base_url ?>/<?= $child['icon'] ?>" alt=""><?php endif; ?>
-                                    <span><?= htmlspecialchars($child['name']) ?></span>
+                            <?php foreach ($menu_lv2 as $lv2): ?>
+                               
+                                <a href="<?= htmlspecialchars($link_lv2) ?>" class="dropdown-item">
+                                    <?php if (!empty($lv2['img_url'])): ?>
+                                        <img src="<?= htmlspecialchars($lv2['img_url']) ?>" alt="<?= htmlspecialchars($lv2['tendm']) ?>">
+                                    <?php endif; ?>
+                                    <?= htmlspecialchars($lv2['tendm']) ?>
                                 </a>
                             <?php endforeach; ?>
                         </div>
@@ -99,6 +92,7 @@ $base_url = '/Pharmacy-management';
         </ul>
     </div>
 </nav>
+
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
     body { font-family: 'Poppins', sans-serif; margin: 0; }

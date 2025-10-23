@@ -474,8 +474,8 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
 
             <!-- Category 5 -->
             <div class="category-item" data-category="ho-tro-tieu-hoa">
-                <div class="card">
-                    <i class="bi bi-prescription2"></i>
+                <div class="category-icon">
+                    <i class="fas fa-stomach"></i>
                 </div>
                 <div class="category-info">
                     <h3 class="category-name">Hỗ trợ tiêu hóa</h3>

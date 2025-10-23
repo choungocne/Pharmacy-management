@@ -24,45 +24,38 @@ $doituong_list = []; // *** MỚI: Bộ lọc đối tượng ***
 $muivi_list = []; // *** MỚI: Bộ lọc mùi vị ***
 
 // Kiểm tra xem đây là danh mục cấp 1 hay cấp 2
-$stmt_cat1 = $pdo->prepare("SELECT madm1, tendm1 FROM danhmuc_cap1 WHERE code = :code");
-$stmt_cat1->execute(['code' => $code]);
-$category1 = $stmt_cat1->fetch();
+$is_cap1 = true; // Giả định ban đầu là cấp 1, cần kiểm tra dựa trên code
 
-$stmt_cat2 = $pdo->prepare("SELECT madm2, tendm2 FROM danhmuc_cap2 WHERE code = :code");
-$stmt_cat2->execute(['code' => $code]);
-$category2 = $stmt_cat2->fetch();
+// Giả sử code cho cấp 1 là uppercase không có dấu gạch dưới, cấp 2 có
+if (strpos($code, '_') === false) {
+    $cap_level = 'cap1';
+} else {
+    $cap_level = 'cap2';
+    $is_cap1 = false;
+}
 
 try {
-    if ($category1) { // Nếu là danh mục cha (cấp 1)
-        $current_cat_id = $category1['madm1'];
-        $category_name = $category1['tendm1'];
+    if ($is_cap1) { // Nếu là danh mục cha (cấp 1)
+        $category_name = str_replace('_', ' ', $code);
         
-        // Lấy sản phẩm
+        // Lấy sản phẩm cho cấp 1
         $stmt_prod = $pdo->prepare("
-            SELECT sp.*, dv.tendv FROM sanpham sp
+            SELECT sp.*, dv.tendv AS donvitinh FROM sanpham sp
             LEFT JOIN donvitinh dv ON sp.madv = dv.madv
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            JOIN danhmuc_cap2 dm2 ON dm3.madm2 = dm2.madm2
-            WHERE dm2.madm1 = :id AND sp.trangthai = 1
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1
             GROUP BY sp.masp
         ");
-        $stmt_prod->execute(['id' => $current_cat_id]);
+        $stmt_prod->execute(['cap1' => str_replace('_', ' ', $code)]);
         $products = $stmt_prod->fetchAll();
 
         // Lấy danh mục con (Cấp 2)
         $stmt_sub = $pdo->prepare("
-            SELECT dm2.tendm2, dm2.code, di.url AS icon_url, COUNT(DISTINCT sp.masp) as product_count 
-            FROM danhmuc_cap2 dm2
-            LEFT JOIN dm2_image dmi ON dmi.madm2 = dm2.madm2
-            LEFT JOIN media_file di ON dmi.file_id = di.id
-            LEFT JOIN danhmuc_cap3 dm3 ON dm3.madm2 = dm2.madm2
-            LEFT JOIN sp_dm3 j ON j.madm3 = dm3.madm3
-            LEFT JOIN sanpham sp ON sp.masp = j.masp AND sp.trangthai = 1
-            WHERE dm2.madm1 = :id
-            GROUP BY dm2.madm2, dm2.tendm2, dm2.code, di.url
+            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) AS tendm2, COUNT(DISTINCT sp.masp) as product_count 
+            FROM sanpham sp
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1
+            GROUP BY tendm2
         ");
-        $stmt_sub->execute(['id' => $current_cat_id]);
+        $stmt_sub->execute(['cap1' => str_replace('_', ' ', $code)]);
         $sub_categories = $stmt_sub->fetchAll();
         
         // Lấy thương hiệu cho Cấp 1
@@ -70,161 +63,135 @@ try {
             SELECT DISTINCT th.math, th.tenth 
             FROM thuonghieu th
             JOIN sanpham sp ON sp.math = th.math
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            JOIN danhmuc_cap2 dm2 ON dm3.madm2 = dm2.madm2
-            WHERE dm2.madm1 = :id AND sp.trangthai = 1
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1
             ORDER BY th.tenth
         ");
-        $stmt_brands->execute(['id' => $current_cat_id]);
+        $stmt_brands->execute(['cap1' => str_replace('_', ' ', $code)]);
         $brands = $stmt_brands->fetchAll();
         
         // *** MỚI: Lấy Đối tượng sử dụng cho Cấp 1 ***
         $stmt_doituong = $pdo->prepare("
-            SELECT DISTINCT sp.doituong
+            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(doituong, '$[*]')) AS doituong
             FROM sanpham sp
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            JOIN danhmuc_cap2 dm2 ON dm3.madm2 = dm2.madm2
-            WHERE dm2.madm1 = :id AND sp.trangthai = 1 AND sp.doituong IS NOT NULL AND sp.doituong != ''
-            ORDER BY sp.doituong
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1 AND JSON_LENGTH(doituong) > 0
+            ORDER BY doituong
         ");
-        $stmt_doituong->execute(['id' => $current_cat_id]);
+        $stmt_doituong->execute(['cap1' => str_replace('_', ' ', $code)]);
         $doituong_list = $stmt_doituong->fetchAll(PDO::FETCH_COLUMN);
 
         // *** MỚI: Lấy Mùi vị cho Cấp 1 ***
         $stmt_muivi = $pdo->prepare("
-            SELECT DISTINCT sp.muivi
-            FROM sanpham sp
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            JOIN danhmuc_cap2 dm2 ON dm3.madm2 = dm2.madm2
-            WHERE dm2.madm1 = :id AND sp.trangthai = 1 AND sp.muivi IS NOT NULL AND sp.muivi != ''
-            ORDER BY sp.muivi
+            SELECT DISTINCT mv.tenmv
+            FROM muivi mv
+            JOIN sanpham sp ON sp.mamv = mv.mamv
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1 AND mv.tenmv IS NOT NULL
+            ORDER BY mv.tenmv
         ");
-        $stmt_muivi->execute(['id' => $current_cat_id]);
+        $stmt_muivi->execute(['cap1' => str_replace('_', ' ', $code)]);
         $muivi_list = $stmt_muivi->fetchAll(PDO::FETCH_COLUMN);
 
-    } elseif ($category2) { // Nếu là danh mục con (cấp 2)
-        $current_cat_id = $category2['madm2'];
-        $category_name = $category2['tendm2'];
+    } else { // Nếu là danh mục con (cấp 2)
+        $category_name = str_replace('_', ' ', $code);
         
-        // Lấy sản phẩm
+        // Lấy sản phẩm cho cấp 2
         $stmt_prod = $pdo->prepare("
-            SELECT sp.*, dv.tendv FROM sanpham sp
+            SELECT sp.*, dv.tendv AS donvitinh FROM sanpham sp
             LEFT JOIN donvitinh dv ON sp.madv = dv.madv
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            WHERE dm3.madm2 = :id AND sp.trangthai = 1
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1
             GROUP BY sp.masp
         ");
-        $stmt_prod->execute(['id' => $current_cat_id]);
+        $stmt_prod->execute(['cap2' => str_replace('_', ' ', $code)]);
         $products = $stmt_prod->fetchAll();
-        
-        // Lấy danh mục Cấp 3 làm bộ lọc
-        $stmt_sub3 = $pdo->prepare("
-            SELECT madm3, tendm3, code 
-            FROM danhmuc_cap3 
-            WHERE madm2 = :id 
-            ORDER BY tendm3
+
+        // Lấy danh mục con cấp 3 nếu có
+        $stmt_sub_lvl3 = $pdo->prepare("
+            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap3')) AS tendm3, COUNT(DISTINCT sp.masp) as product_count 
+            FROM sanpham sp
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1 AND JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap3')) IS NOT NULL
+            GROUP BY tendm3
         ");
-        $stmt_sub3->execute(['id' => $current_cat_id]);
-        $sub_categories_lvl3 = $stmt_sub3->fetchAll();
+        $stmt_sub_lvl3->execute(['cap2' => str_replace('_', ' ', $code)]);
+        $sub_categories_lvl3 = $stmt_sub_lvl3->fetchAll();
         
         // Lấy thương hiệu cho Cấp 2
         $stmt_brands = $pdo->prepare("
-            SELECT DISTINCT th.math, th.tenth
+            SELECT DISTINCT th.math, th.tenth 
             FROM thuonghieu th
             JOIN sanpham sp ON sp.math = th.math
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            WHERE dm3.madm2 = :id AND sp.trangthai = 1
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1
             ORDER BY th.tenth
         ");
-        $stmt_brands->execute(['id' => $current_cat_id]);
+        $stmt_brands->execute(['cap2' => str_replace('_', ' ', $code)]);
         $brands = $stmt_brands->fetchAll();
         
         // *** MỚI: Lấy Đối tượng sử dụng cho Cấp 2 ***
         $stmt_doituong = $pdo->prepare("
-            SELECT DISTINCT sp.doituong
+            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(doituong, '$[*]')) AS doituong
             FROM sanpham sp
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            WHERE dm3.madm2 = :id AND sp.trangthai = 1 AND sp.doituong IS NOT NULL AND sp.doituong != ''
-            ORDER BY sp.doituong
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1 AND JSON_LENGTH(doituong) > 0
+            ORDER BY doituong
         ");
-        $stmt_doituong->execute(['id' => $current_cat_id]);
+        $stmt_doituong->execute(['cap2' => str_replace('_', ' ', $code)]);
         $doituong_list = $stmt_doituong->fetchAll(PDO::FETCH_COLUMN);
 
         // *** MỚI: Lấy Mùi vị cho Cấp 2 ***
         $stmt_muivi = $pdo->prepare("
-            SELECT DISTINCT sp.muivi
-            FROM sanpham sp
-            JOIN sp_dm3 j ON sp.masp = j.masp
-            JOIN danhmuc_cap3 dm3 ON j.madm3 = dm3.madm3
-            WHERE dm3.madm2 = :id AND sp.trangthai = 1 AND sp.muivi IS NOT NULL AND sp.muivi != ''
-            ORDER BY sp.muivi
+            SELECT DISTINCT mv.tenmv
+            FROM muivi mv
+            JOIN sanpham sp ON sp.mamv = mv.mamv
+            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1 AND mv.tenmv IS NOT NULL
+            ORDER BY mv.tenmv
         ");
-        $stmt_muivi->execute(['id' => $current_cat_id]);
+        $stmt_muivi->execute(['cap2' => str_replace('_', ' ', $code)]);
         $muivi_list = $stmt_muivi->fetchAll(PDO::FETCH_COLUMN);
     }
+
 } catch (PDOException $e) {
-    die("Lỗi truy vấn CSDL: " . $e->getMessage());
+    die("Lỗi truy vấn: " . $e->getMessage());
 }
 ?>
 
-<link rel="stylesheet" href="<?= $base_url ?>/static/css/product.css">
-
 <div class="container">
-    <section class="featured-categories-section">
-        <div class="section-header">
-            <h2><?= htmlspecialchars($category_name) ?></h2>
-        </div>
-        
-        <?php if (!empty($sub_categories)): // Chỉ hiển thị mục này nếu là danh mục cha (Cấp 1) ?>
-        <div class="categories-grid">
-            <?php foreach ($sub_categories as $sub_cat): ?>
-                <a href="<?= $base_url ?>/base.php?page=danhmuc&code=<?= $sub_cat['code'] ?>" class="category-item">
-                    <div class="category-icon">
-                        <?php if(!empty($sub_cat['icon_url'])): ?>
-                            <img src="<?= $base_url ?><?= htmlspecialchars($sub_cat['icon_url']) ?>" alt="<?= htmlspecialchars($sub_cat['tendm2']) ?>">
-                        <?php else: ?>
-                            <i class="fas fa-tag"></i> 
-                        <?php endif; ?>
-                    </div>
-                    <div class="category-info">
-                        <h3 class="category-name"><?= htmlspecialchars($sub_cat['tendm2']) ?></h3>
-                        <span class="category-count"><?= $sub_cat['product_count'] ?> sản phẩm</span>
-                    </div>
-                </a>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-    </section>
-
-    <section class="product-wrapper">
+    <section class="product-section">
         <div class="product-layout">
             <aside class="filter-panel">
-                <h3><i class="fas fa-filter"></i> Bộ lọc</h3>
-
-                <?php // Hiển thị bộ lọc Cấp 3 NẾU đang ở trang Cấp 2 ?>
-                <?php if (!empty($sub_categories_lvl3)): ?>
-                <div class="filter-group">
-                    <h4>Danh mục chi tiết</h4>
-                    <div class="filter-options">
-                        <label><input type="checkbox" name="dm3_all" checked> Tất cả</label>
-                        <?php foreach ($sub_categories_lvl3 as $cat3): ?>
-                        <label><input type="checkbox" name="dm3[]" value="<?= $cat3['code'] ?>"> <?= htmlspecialchars($cat3['tendm3']) ?></label>
+                <h3><i class="fas fa-filter"></i> Bộ lọc nâng cao</h3>
+                
+                <?php if ($is_cap1 && !empty($sub_categories)): ?>
+                <div class="sub-categories">
+                    <h3><?php echo htmlspecialchars($category_name); ?></h3>
+                    <div class="sub-grid">
+                        <?php foreach ($sub_categories as $sub): ?>
+                            <?php $sub_code = strtoupper(preg_replace('/\s+/', '_', $sub['tendm2'])); ?>
+                            <a href="<?= $base_url ?>/base.php?page=danhmuc&code=<?= urlencode($sub_code) ?>" class="sub-item">
+                                <div class="sub-icon">
+                                    <img src="<?= $base_url ?>/static/img/default_icon.png" alt=""> <!-- Thay bằng icon nếu có -->
+                                </div>
+                                <div class="sub-info">
+                                    <h4><?= htmlspecialchars($sub['tendm2']) ?></h4>
+                                    <p><?= $sub['product_count'] ?> sản phẩm</p>
+                                </div>
+                            </a>
                         <?php endforeach; ?>
                     </div>
                 </div>
                 <?php endif; ?>
 
-                <?php // BỘ LỌC GIÁ BÁN (TĨNH) ?>
+                <?php if (!$is_cap1 && !empty($sub_categories_lvl3)): ?>
+                <div class="sub-categories-lvl3">
+                    <h3>Danh mục con cấp 3</h3>
+                    <ul>
+                        <?php foreach ($sub_categories_lvl3 as $lvl3): ?>
+                            <li><?= htmlspecialchars($lvl3['tendm3']) ?> (<?= $lvl3['product_count'] ?> sản phẩm)</li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+
                 <div class="filter-group">
-                    <h4>Khoảng giá</h4>
+                    <h4>Giá bán</h4>
                     <div class="filter-options">
-                        <label><input type="radio" name="price_range" value="all" checked> Tất cả</Ghi>
+                        <label><input type="radio" name="price_range" value="all" checked> Tất cả</label>
                         <label><input type="radio" name="price_range" value="0-100000"> Dưới 100.000đ</label>
                         <label><input type="radio" name="price_range" value="100000-300000"> 100.000đ - 300.000đ</label>
                         <label><input type="radio" name="price_range" value="300000-500000"> 300.000đ - 500.000đ</label>
