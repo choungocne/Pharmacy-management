@@ -5,6 +5,8 @@ $pdo = new PDO(
   [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
 );
 
+// *** THÊM DÒNG NÀY ***
+$base_url = '/Pharmacy-management'; // Thêm base_url để các link logo/trang chủ hoạt động
 
 // --- Lấy danh mục cấp 1 ---
 $sql_lv1 = "SELECT * FROM danhmuc WHERE cap = 1 ORDER BY madm";
@@ -19,6 +21,7 @@ $href_map = [
     'Hệ thống nhà thuốc'  => 'base.php?page=about'
 ];
 ?>
+
 
 
 
@@ -41,6 +44,8 @@ $href_map = [
         </div>
     </div>
 </div>
+
+
 <header class="main-header">
     <div class="header-top">
         <div class="logo">
@@ -78,7 +83,7 @@ $href_map = [
                         <div class="dropdown-menu">
                             <?php foreach ($menu_lv2 as $lv2): ?>
                                
-                                <a href="<?= htmlspecialchars($link_lv2) ?>" class="dropdown-item">
+                                <a href="<?= $base_url ?>/base.php?page=danhmuc&madm=<?= $lv2['madm'] ?>" class="dropdown-item">
                                     <?php if (!empty($lv2['img_url'])): ?>
                                         <img src="<?= htmlspecialchars($lv2['img_url']) ?>" alt="<?= htmlspecialchars($lv2['tendm']) ?>">
                                     <?php endif; ?>

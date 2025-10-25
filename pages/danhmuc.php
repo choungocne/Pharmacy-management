@@ -1,193 +1,370 @@
 <?php
 // File: pages/danhmuc.php
+// PHIÊN BẢN AJAX FILTER
 
-// 1. KẾT NỐI CSDL VÀ LẤY DỮ LIỆU
+// 1. KẾT NỐI CSDL VÀ CÁC HÀM HỖ TRỢ
 // ===================================
 include_once __DIR__ . '/../db.php'; // Sử dụng file kết nối chung
+if (!function_exists('pdo')) {
+    function pdo() {
+        return new PDO(
+          'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
+          [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
+        );
+    }
+}
+if (!function_exists('money_vn')) {
+    function money_vn($price) {
+        return number_format($price, 0, ',', '.');
+    }
+}
+
 $pdo = pdo();
 $base_url = '/Pharmacy-management';
+$madm_cap2 = $_GET['madm'] ?? 0;
 
-// Lấy mã danh mục từ URL (ví dụ: ?code=TP_CHUC_NANG)
-$code = $_GET['code'] ?? '';
-if (empty($code)) {
-    die("Không tìm thấy mã danh mục.");
+// 2. LẤY THÔNG TIN DANH MỤC CẤP 2 HIỆN TẠI
+// ===================================
+$stmt_dm2 = $pdo->prepare("SELECT * FROM danhmuc WHERE madm = ? AND cap = 2");
+$stmt_dm2->execute([$madm_cap2]);
+$dm2 = $stmt_dm2->fetch(PDO::FETCH_ASSOC);
+
+if (!$dm2) {
+    echo "<h3>Danh mục không tồn tại</h3>";
+    exit;
 }
 
-// 2. XÁC ĐỊNH DANH MỤC VÀ TRUY VẤN SẢN PHẨM
-// ===========================================
-$category_name = "Danh mục không tồn tại";
-$products = [];
-$sub_categories = []; // Dùng khi ở Cấp 1
-$sub_categories_lvl3 = []; // Dùng khi ở Cấp 2
-$brands = []; // Bộ lọc thương hiệu
-$doituong_list = []; // *** MỚI: Bộ lọc đối tượng ***
-$muivi_list = []; // *** MỚI: Bộ lọc mùi vị ***
+// 3. LẤY DANH MỤC CẤP 3
+// =======================================================
+$stmt_lv3 = $pdo->prepare("SELECT * FROM danhmuc WHERE parent_id = ? AND cap = 3 ORDER BY tendm");
+$stmt_lv3->execute([$madm_cap2]);
+$sub_categories_lvl3 = $stmt_lv3->fetchAll(PDO::FETCH_ASSOC);
+$madm_cap3_list = array_column($sub_categories_lvl3, 'madm');
 
-// Kiểm tra xem đây là danh mục cấp 1 hay cấp 2
-$is_cap1 = true; // Giả định ban đầu là cấp 1, cần kiểm tra dựa trên code
-
-// Giả sử code cho cấp 1 là uppercase không có dấu gạch dưới, cấp 2 có
-if (strpos($code, '_') === false) {
-    $cap_level = 'cap1';
-} else {
-    $cap_level = 'cap2';
-    $is_cap1 = false;
+// 4. LẤY SỐ LƯỢNG SẢN PHẨM CHO MỖI DANH MỤC CẤP 3
+// =======================================================
+$product_counts = []; // Khởi tạo mảng
+if (!empty($madm_cap3_list)) {
+    $placeholders_count = implode(',', array_fill(0, count($madm_cap3_list), '?'));
+    $sql_count = "SELECT madm, COUNT(*) as product_count FROM sanpham WHERE madm IN ($placeholders_count) GROUP BY madm";
+    $stmt_count = $pdo->prepare($sql_count);
+    $stmt_count->execute($madm_cap3_list);
+    $product_counts = $stmt_count->fetchAll(PDO::FETCH_KEY_PAIR);
 }
 
-try {
-    if ($is_cap1) { // Nếu là danh mục cha (cấp 1)
-        $category_name = str_replace('_', ' ', $code);
-        
-        // Lấy sản phẩm cho cấp 1
-        $stmt_prod = $pdo->prepare("
-            SELECT sp.*, dv.tendv AS donvitinh FROM sanpham sp
-            LEFT JOIN donvitinh dv ON sp.madv = dv.madv
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1
-            GROUP BY sp.masp
-        ");
-        $stmt_prod->execute(['cap1' => str_replace('_', ' ', $code)]);
-        $products = $stmt_prod->fetchAll();
+// 5. LẤY TẤT CẢ SẢN PHẨM (CHỈ LẤY LẦN ĐẦU)
+// =======================================================
+$products = []; // Luôn khởi tạo là mảng rỗng
+if (!empty($madm_cap3_list)) {
+    $placeholders_prod = implode(',', array_fill(0, count($madm_cap3_list), '?'));
+    $sql_prod = "SELECT * FROM sanpham WHERE madm IN ($placeholders_prod)";
+    $stmt_prod = $pdo->prepare($sql_prod);
+    $stmt_prod->execute($madm_cap3_list);
+    $products = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
+}
 
-        // Lấy danh mục con (Cấp 2)
-        $stmt_sub = $pdo->prepare("
-            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) AS tendm2, COUNT(DISTINCT sp.masp) as product_count 
-            FROM sanpham sp
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1
-            GROUP BY tendm2
-        ");
-        $stmt_sub->execute(['cap1' => str_replace('_', ' ', $code)]);
-        $sub_categories = $stmt_sub->fetchAll();
-        
-        // Lấy thương hiệu cho Cấp 1
-        $stmt_brands = $pdo->prepare("
-            SELECT DISTINCT th.math, th.tenth 
-            FROM thuonghieu th
-            JOIN sanpham sp ON sp.math = th.math
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1
-            ORDER BY th.tenth
-        ");
-        $stmt_brands->execute(['cap1' => str_replace('_', ' ', $code)]);
-        $brands = $stmt_brands->fetchAll();
-        
-        // *** MỚI: Lấy Đối tượng sử dụng cho Cấp 1 ***
-        $stmt_doituong = $pdo->prepare("
-            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(doituong, '$[*]')) AS doituong
-            FROM sanpham sp
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1 AND JSON_LENGTH(doituong) > 0
-            ORDER BY doituong
-        ");
-        $stmt_doituong->execute(['cap1' => str_replace('_', ' ', $code)]);
-        $doituong_list = $stmt_doituong->fetchAll(PDO::FETCH_COLUMN);
+// 6. TẠO BỘ LỌC ĐỘNG
+// =======================================================
 
-        // *** MỚI: Lấy Mùi vị cho Cấp 1 ***
-        $stmt_muivi = $pdo->prepare("
-            SELECT DISTINCT mv.tenmv
-            FROM muivi mv
-            JOIN sanpham sp ON sp.mamv = mv.mamv
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap1')) = :cap1 AND sp.trangthai = 1 AND mv.tenmv IS NOT NULL
-            ORDER BY mv.tenmv
-        ");
-        $stmt_muivi->execute(['cap1' => str_replace('_', ' ', $code)]);
-        $muivi_list = $stmt_muivi->fetchAll(PDO::FETCH_COLUMN);
+// --- LỌC THƯƠNG HIỆU ---
+$brands = []; // Khởi tạo mảng
+$product_math_ids = array_values(array_unique(array_filter(array_column($products, 'math'))));
+if (!empty($product_math_ids)) {
+    $placeholders_brand = implode(',', array_fill(0, count($product_math_ids), '?'));
+    $sql_brand = "SELECT math, tenth FROM thuonghieu WHERE math IN ($placeholders_brand) ORDER BY tenth";
+    $stmt_brand = $pdo->prepare($sql_brand);
+    $stmt_brand->execute($product_math_ids);
+    $brands = $stmt_brand->fetchAll(PDO::FETCH_ASSOC);
+}
 
-    } else { // Nếu là danh mục con (cấp 2)
-        $category_name = str_replace('_', ' ', $code);
-        
-        // Lấy sản phẩm cho cấp 2
-        $stmt_prod = $pdo->prepare("
-            SELECT sp.*, dv.tendv AS donvitinh FROM sanpham sp
-            LEFT JOIN donvitinh dv ON sp.madv = dv.madv
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1
-            GROUP BY sp.masp
-        ");
-        $stmt_prod->execute(['cap2' => str_replace('_', ' ', $code)]);
-        $products = $stmt_prod->fetchAll();
-
-        // Lấy danh mục con cấp 3 nếu có
-        $stmt_sub_lvl3 = $pdo->prepare("
-            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap3')) AS tendm3, COUNT(DISTINCT sp.masp) as product_count 
-            FROM sanpham sp
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1 AND JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap3')) IS NOT NULL
-            GROUP BY tendm3
-        ");
-        $stmt_sub_lvl3->execute(['cap2' => str_replace('_', ' ', $code)]);
-        $sub_categories_lvl3 = $stmt_sub_lvl3->fetchAll();
-        
-        // Lấy thương hiệu cho Cấp 2
-        $stmt_brands = $pdo->prepare("
-            SELECT DISTINCT th.math, th.tenth 
-            FROM thuonghieu th
-            JOIN sanpham sp ON sp.math = th.math
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1
-            ORDER BY th.tenth
-        ");
-        $stmt_brands->execute(['cap2' => str_replace('_', ' ', $code)]);
-        $brands = $stmt_brands->fetchAll();
-        
-        // *** MỚI: Lấy Đối tượng sử dụng cho Cấp 2 ***
-        $stmt_doituong = $pdo->prepare("
-            SELECT DISTINCT JSON_UNQUOTE(JSON_EXTRACT(doituong, '$[*]')) AS doituong
-            FROM sanpham sp
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1 AND JSON_LENGTH(doituong) > 0
-            ORDER BY doituong
-        ");
-        $stmt_doituong->execute(['cap2' => str_replace('_', ' ', $code)]);
-        $doituong_list = $stmt_doituong->fetchAll(PDO::FETCH_COLUMN);
-
-        // *** MỚI: Lấy Mùi vị cho Cấp 2 ***
-        $stmt_muivi = $pdo->prepare("
-            SELECT DISTINCT mv.tenmv
-            FROM muivi mv
-            JOIN sanpham sp ON sp.mamv = mv.mamv
-            WHERE JSON_UNQUOTE(JSON_EXTRACT(sp.danhmuc, '$[0].cap2')) = :cap2 AND sp.trangthai = 1 AND mv.tenmv IS NOT NULL
-            ORDER BY mv.tenmv
-        ");
-        $stmt_muivi->execute(['cap2' => str_replace('_', ' ', $code)]);
-        $muivi_list = $stmt_muivi->fetchAll(PDO::FETCH_COLUMN);
+// --- LỌC ĐỐI TƯỢNG (từ cột JSON) ---
+$doituong_list = []; // Khởi tạo mảng
+foreach ($products as $product) {
+    if (!empty($product['doituong'])) {
+        $doituong_data = json_decode($product['doituong'], true);
+        if (is_array($doituong_data)) {
+            $doituong_list = array_merge($doituong_list, $doituong_data);
+        }
     }
-
-} catch (PDOException $e) {
-    die("Lỗi truy vấn: " . $e->getMessage());
 }
+$doituong_list = array_unique(array_filter($doituong_list));
+sort($doituong_list);
+
+// --- LỌC MÙI VỊ (từ bảng muivi) ---
+$muivi_list = []; // Khởi tạo mảng
+$product_mamv_ids = array_values(array_unique(array_filter(array_column($products, 'mamv'))));
+if (!empty($product_mamv_ids)) {
+    // *** SỬA ĐỔI: Lấy cả ID (mamv) và TÊN (tenmv) ***
+    $placeholders_mv = implode(',', array_fill(0, count($product_mamv_ids), '?'));
+    $sql_mv = "SELECT mamv, tenmv FROM muivi WHERE mamv IN ($placeholders_mv) ORDER BY tenmv";
+    $stmt_mv = $pdo->prepare($sql_mv);
+    $stmt_mv->execute($product_mamv_ids);
+    $muivi_list = $stmt_mv->fetchAll(PDO::FETCH_ASSOC); // <<< Sửa từ FETCH_COLUMN
+}
+
 ?>
 
+<style>
+    /* --- CÀI ĐẶT CHUNG --- */
+    .container {
+        width: 90%;
+        max-width: 1400px;
+        margin: 20px auto;
+    }
+    
+    /* --- BỐ CỤC CHIA ĐÔI --- */
+    .product-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr; 
+        gap: 24px;
+        margin-top: 20px;
+    }
+
+    /* --- CSS CHO CỘT BỘ LỌC (ASIDE) --- */
+    .filter-panel {
+        background-color: #fff;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        align-self: start; 
+    }
+    .filter-panel h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 16px;
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 10px;
+    }
+    .filter-group {
+        margin-bottom: 20px;
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 20px;
+    }
+    .filter-group:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+    .filter-group h4 {
+        font-size: 15px;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 12px;
+    }
+    .filter-options label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        color: #333;
+        cursor: pointer;
+    }
+    .filter-options input {
+        margin-right: 8px;
+        transform: translateY(1px);
+    }
+    .filter-options.scrollable {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    /* --- LƯỚI DANH MỤC CẤP 3 (Ở TRÊN CÙNG) --- */
+    .category-grid-container {
+        margin-bottom: 24px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        padding: 20px;
+    }
+    .category-grid-container h2 {
+        font-size: 20px;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 16px;
+        color: #333;
+    }
+    .category-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+    }
+    .category-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid #e0e0f0;
+        border-radius: 8px;
+        transition: box-shadow 0.3s, border-color 0.3s;
+        text-decoration: none;
+        color: inherit;
+    }
+    .category-item:hover {
+        border-color: #004aad;
+        box-shadow: 0 4px 12px rgba(0, 74, 173, 0.1);
+    }
+    .category-icon {
+        flex-shrink: 0;
+        width: 48px;
+        height: 48px;
+        background-color: #f4f4f4;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .category-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .category-info h4 {
+        font-size: 15px;
+        font-weight: 500;
+        margin: 0 0 4px 0;
+        color: #111;
+    }
+    .category-info p {
+        font-size: 13px;
+        color: #777;
+        margin: 0;
+    }
+
+    /* --- CỘT SẢN PHẨM (BÊN PHẢI) --- */
+    .product-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px;
+        background-color: #fff;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .product-header .title h2 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+    }
+    .product-header .title p {
+        font-size: 14px;
+        color: #777;
+        margin: 4px 0 0 0;
+    }
+    
+    /* --- LƯỚI SẢN PHẨM --- */
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        /* Thêm hiệu ứng khi tải lại */
+        transition: opacity 0.3s;
+    }
+    /* Thêm class này khi đang tải */
+    .product-grid.loading {
+        opacity: 0.5;
+    }
+
+    .product-card {
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        overflow: hidden;
+        text-decoration: none;
+        color: #333;
+        transition: box-shadow 0.3s;
+        position: relative;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+    }
+    .product-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .product-card img {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: contain;
+        margin-bottom: 12px;
+    }
+    .product-card h3 {
+        font-size: 14px;
+        font-weight: 500;
+        margin: 0 0 8px 0;
+        height: 40px; /* 2 dòng */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    .product-card .price {
+        font-size: 16px;
+        font-weight: 600;
+        color: #d9534f;
+        margin: 0 0 4px 0;
+    }
+    .product-card .old-price {
+        font-size: 13px;
+        color: #777;
+        text-decoration: line-through;
+        margin-left: 8px;
+    }
+    .product-card .discount-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: #d9534f;
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 6px;
+        border-radius: 4px;
+    }
+    .product-card .btn-buy {
+        display: block;
+        width: 100%;
+        background-color: #004aad;
+        color: white;
+        border: none;
+        padding: 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+        text-align: center;
+        margin-top: auto; /* Đẩy nút xuống dưới cùng */
+    }
+</style>
+
 <div class="container">
+
+    <?php if (!empty($sub_categories_lvl3)): ?>
+    <div class="category-grid-container">
+        <h2><?= htmlspecialchars($dm2['tendm']) ?></h2>
+        <div class="category-grid">
+            <?php foreach ($sub_categories_lvl3 as $lvl3): ?>
+                <?php $count = $product_counts[$lvl3['madm']] ?? 0; ?>
+                <a href="#" class="category-item">
+                    <div class="category-icon">
+                        <img src="<?= htmlspecialchars($lvl3['img_url'] ?? '/static/img/default_icon.png') ?>" alt="<?= htmlspecialchars($lvl3['tendm']) ?>">
+                    </div>
+                    <div class="category-info">
+                        <h4><?= htmlspecialchars($lvl3['tendm']) ?></h4>
+                        <p><?= $count ?> sản phẩm</p>
+                    </div>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <section class="product-section">
         <div class="product-layout">
-            <aside class="filter-panel">
+            
+            <aside class="filter-panel" id="filter-panel">
                 <h3><i class="fas fa-filter"></i> Bộ lọc nâng cao</h3>
                 
-                <?php if ($is_cap1 && !empty($sub_categories)): ?>
-                <div class="sub-categories">
-                    <h3><?php echo htmlspecialchars($category_name); ?></h3>
-                    <div class="sub-grid">
-                        <?php foreach ($sub_categories as $sub): ?>
-                            <?php $sub_code = strtoupper(preg_replace('/\s+/', '_', $sub['tendm2'])); ?>
-                            <a href="<?= $base_url ?>/base.php?page=danhmuc&code=<?= urlencode($sub_code) ?>" class="sub-item">
-                                <div class="sub-icon">
-                                    <img src="<?= $base_url ?>/static/img/default_icon.png" alt=""> <!-- Thay bằng icon nếu có -->
-                                </div>
-                                <div class="sub-info">
-                                    <h4><?= htmlspecialchars($sub['tendm2']) ?></h4>
-                                    <p><?= $sub['product_count'] ?> sản phẩm</p>
-                                </div>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <?php endif; ?>
-
-                <?php if (!$is_cap1 && !empty($sub_categories_lvl3)): ?>
-                <div class="sub-categories-lvl3">
-                    <h3>Danh mục con cấp 3</h3>
-                    <ul>
-                        <?php foreach ($sub_categories_lvl3 as $lvl3): ?>
-                            <li><?= htmlspecialchars($lvl3['tendm3']) ?> (<?= $lvl3['product_count'] ?> sản phẩm)</li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-                <?php endif; ?>
-
                 <div class="filter-group">
                     <h4>Giá bán</h4>
                     <div class="filter-options">
@@ -199,12 +376,10 @@ try {
                     </div>
                 </div>
 
-                <?php // BỘ LỌC THƯƠNG HIỆU (ĐỘNG) ?>
                 <?php if (!empty($brands)): ?>
                 <div class="filter-group">
                     <h4>Thương hiệu</h4>
-                    <div class="filter-options">
-                        <label><input type="checkbox" name="brand_all" checked> Tất cả</label>
+                    <div class="filter-options scrollable">
                         <?php foreach ($brands as $brand): ?>
                         <label><input type="checkbox" name="brand[]" value="<?= $brand['math'] ?>"> <?= htmlspecialchars($brand['tenth']) ?></label>
                         <?php endforeach; ?>
@@ -212,12 +387,10 @@ try {
                 </div>
                 <?php endif; ?>
                 
-                <?php // *** PHẦN MỚI: BỘ LỌC ĐỐI TƯỢNG (ĐỘNG) *** ?>
                 <?php if (!empty($doituong_list)): ?>
                 <div class="filter-group">
                     <h4>Đối tượng sử dụng</h4>
-                    <div class="filter-options">
-                        <label><input type="checkbox" name="doituong_all" checked> Tất cả</label>
+                    <div class="filter-options scrollable">
                         <?php foreach ($doituong_list as $doituong): ?>
                         <label><input type="checkbox" name="doituong[]" value="<?= htmlspecialchars($doituong) ?>"> <?= htmlspecialchars($doituong) ?></label>
                         <?php endforeach; ?>
@@ -225,41 +398,50 @@ try {
                 </div>
                 <?php endif; ?>
 
-                <?php // *** PHẦN MỚI: BỘ LỌC MÙI VỊ (ĐỘNG) *** ?>
                 <?php if (!empty($muivi_list)): ?>
                 <div class="filter-group">
                     <h4>Mùi vị</h4>
-                    <div class="filter-options">
-                        <label><input type="checkbox" name="muivi_all" checked> Tất cả</label>
+                    <div class="filter-options scrollable">
                         <?php foreach ($muivi_list as $muivi): ?>
-                        <label><input type="checkbox" name="muivi[]" value="<?= htmlspecialchars($muivi) ?>"> <?= htmlspecialchars($muivi) ?></label>
+                        <label><input type="checkbox" name="muivi[]" value="<?= $muivi['mamv'] ?>"> <?= htmlspecialchars($muivi['tenmv']) ?></label>
                         <?php endforeach; ?>
                     </div>
                 </div>
                 <?php endif; ?>
 
             </aside>
+            
             <div class="product-content">
                 <div class="product-header">
                     <div class="title">
-                        <h2>Danh sách sản phẩm</h2>
-                        <p class="note">Tìm thấy <?= count($products) ?> sản phẩm.</p>
+                        <h2><?= htmlspecialchars($dm2['tendm']) ?></h2>
+                        <p class="note" id="product-count-note">Tìm thấy <?= count($products) ?> sản phẩm.</p>
                     </div>
                 </div>
-                <div class="product-grid">
+                
+                <div class="product-grid" id="product-grid" data-category-ids="<?= htmlspecialchars(json_encode($madm_cap3_list)) ?>">
                     <?php if (empty($products)): ?>
                         <p>Chưa có sản phẩm nào trong danh mục này.</p>
                     <?php else: ?>
                         <?php foreach ($products as $product): ?>
                             <a href="<?= $base_url ?>/base.php?page=product_detail&id=<?= $product['masp'] ?>" class="product-card">
-                                <?php if ($product['giagiam'] > 0 && $product['giaban'] > 0): ?>
-                                    <span class="discount-badge">-<?= round(($product['giagiam'] / $product['giaban']) * 100) ?>%</span>
+                                <?php 
+                                $discount_percent = 0;
+                                $final_price = $product['giaban'];
+                                if ($product['giagiam'] > 0 && $product['giaban'] > 0) {
+                                    $final_price = $product['giaban'] - $product['giagiam'];
+                                    $discount_percent = round(($product['giagiam'] / $product['giaban']) * 100);
+                                }
+                                ?>
+                                <?php if ($discount_percent > 0): ?>
+                                    <span class="discount-badge">-<?= $discount_percent ?>%</span>
                                 <?php endif; ?>
+
                                 <img src="<?= $base_url ?><?= htmlspecialchars($product['hinhsp'] ?? '/static/img/placeholder.jpg') ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
                                 <h3><?= htmlspecialchars($product['tensp']) ?></h3>
                                 <p class="price">
-                                    <?= money_vn($product['giaban'] - $product['giagiam']) ?> đ
-                                    <?php if ($product['giagiam'] > 0): ?>
+                                    <?= money_vn($final_price) ?> đ
+                                    <?php if ($discount_percent > 0): ?>
                                         <span class="old-price"><?= money_vn($product['giaban']) ?>đ</span>
                                     <?php endif; ?>
                                 </p>
@@ -272,3 +454,73 @@ try {
         </div>
     </section>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterPanel = document.getElementById('filter-panel');
+        const productGrid = document.getElementById('product-grid');
+        const productCountNote = document.getElementById('product-count-note');
+
+        // Lắng nghe sự kiện 'change' trên toàn bộ panel lọc
+        filterPanel.addEventListener('change', function(event) {
+            // Chỉ chạy khi người dùng thay đổi input (checkbox, radio)
+            if (event.target.tagName === 'INPUT') {
+                applyFilters();
+            }
+        });
+
+        function applyFilters() {
+            // Thêm class 'loading' để làm mờ grid
+            productGrid.classList.add('loading');
+
+            const formData = new FormData();
+
+            // 1. Lấy danh sách ID danh mục cấp 3
+            const categoryIds = productGrid.dataset.categoryIds;
+            formData.append('category_ids', categoryIds);
+
+            // 2. Lấy giá trị giá
+            const priceRange = document.querySelector('input[name="price_range"]:checked');
+            if (priceRange) {
+                formData.append('price_range', priceRange.value);
+            }
+
+            // 3. Lấy các thương hiệu đã chọn
+            const checkedBrands = document.querySelectorAll('input[name="brand[]"]:checked');
+            checkedBrands.forEach(checkbox => {
+                formData.append('brand[]', checkbox.value);
+            });
+
+            // 4. Lấy các đối tượng đã chọn
+            const checkedDoituong = document.querySelectorAll('input[name="doituong[]"]:checked');
+            checkedDoituong.forEach(checkbox => {
+                formData.append('doituong[]', checkbox.value);
+            });
+
+            // 5. Lấy các mùi vị đã chọn
+            const checkedMuivi = document.querySelectorAll('input[name="muivi[]"]:checked');
+            checkedMuivi.forEach(checkbox => {
+                formData.append('muivi[]', checkbox.value);
+            });
+
+            // 6. Gửi yêu cầu AJAX
+            // Sửa đường dẫn 'pages/filter_products.php' cho đúng với cấu trúc của bạn
+            fetch('pages/filter_products.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 7. Cập nhật lại giao diện
+                productGrid.innerHTML = data.html;
+                productCountNote.innerHTML = `Tìm thấy ${data.count} sản phẩm.`;
+                productGrid.classList.remove('loading');
+            })
+            .catch(error => {
+                console.error('Lỗi khi lọc sản phẩm:', error);
+                productGrid.innerHTML = '<p>Đã xảy ra lỗi khi tải sản phẩm.</p>';
+                productGrid.classList.remove('loading');
+            });
+        }
+    });
+</script>
