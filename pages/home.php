@@ -65,13 +65,13 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
             <div class="carousel-slides">
                 <!-- Slide 1 -->
                 <div class="carousel-slide active">
-                        <img src="static/img/Banner.webp"
+                        <img src="static/img/banner/Banner.webp"
                              alt="Ông bà vui khỏe trọn vẹn yêu thương" class="desktop-img">
                 </div>
 
                 <!-- Slide 2 -->
                 <div class="carousel-slide">
-                        <img src="static/img/Banner2.webp"
+                        <img src="static/img/banner/Banner2.webp"
                              alt="Đăng ký khám sức khỏe sàng lọc miễn phí" class="desktop-img">
                 </div>
 
@@ -115,7 +115,7 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
 
                         <!-- Slide 2 -->
                         <div class="banner-slide">
-                                <img src="static/img/Banner_Web_PC_805x246_ee86632913.webp"
+                                <img src="static/img/banner/Banner_Web_PC_805x246_ee86632913.webp"
                                      alt="Varna Diabetes" class="desktop-img">
                         </div>
 
@@ -154,11 +154,11 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
             <!-- Side Banners -->
             <div class="side-banners">
                 <a href="https://nhathuoclongchau.com.vn/chuyen-trang-ung-thu" class="side-banner">
-                    <img src="static/img/Banner_Ung_Thu_1_185705d391.webp"
+                    <img src="static/img/banner/Banner_Ung_Thu_1_185705d391.webp"
                          alt="Chuyên trang ung thư">
                 </a>
                 <a href="https://nhathuoclongchau.com.vn/tra-cuu/dia-chinh-moi" class="side-banner">
-                    <img src="static/img/Banner_H2_2893cabcaa.webp"
+                    <img src="static/img/banner/Banner_H2_2893cabcaa.webp"
                          alt="Địa chỉ mới">
                 </a>
             </div>

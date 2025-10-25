@@ -1,70 +1,18 @@
 <?php
-// ================== THIẾT LẬP KẾT NỐI DATABASE ==================
-$servername = "localhost";
-$username = "root";
-$password = "";            
-$dbname = "nhathuocantam"; 
-$conn = new mysqli($servername, $username, $password, $dbname);
+require_once 'db.php';
 
-if ($conn->connect_error) {
-    die("Kết nối thất bại: " . $conn->connect_error);
-}
-$conn->set_charset("utf8mb4");
+$sql = "SELECT sp.*, dm.tendm 
+        FROM sanpham sp
+        JOIN danhmuc dm ON sp.madm = dm.madm
+        WHERE sp.madm BETWEEN 26 AND 63
+        ORDER BY sp.masp DESC";
 
-// Giả định: Nếu không có biến $base_url, sử dụng đường dẫn gốc cho ảnh
-$base_url_for_images = isset($base_url) ? $base_url : ''; 
-
-// Hàm định dạng giá
-function format_price($price) {
-    return number_format($price, 0, ',', '.') . '₫';
-}
-
-// ================== 1. TRUY VẤN DỮ LIỆU CHO SẢN PHẨM ==================
-// Lấy ảnh chính (hinhsp) từ bảng sanpham
-$sql_products = "
-    SELECT 
-        sp.masp, sp.tensp, sp.giaban, sp.giagiam, COALESCE(sp.hinhsp, '') AS hinhsp, 
-        dv.tendv, dm.tendm
-    FROM sanpham sp
-    JOIN danhmuc dm ON sp.madm = dm.madm
-    JOIN donvitinh dv ON sp.madv = dv.madv
-    WHERE sp.madm IN (3, 4) -- Lọc theo ID danh mục TPCN và Vitamin
-    LIMIT 20
-";
-
-$result_products = $conn->query($sql_products);
-$products = [];
-
-if ($result_products && $result_products->num_rows > 0) {
-    while ($row = $result_products->fetch_assoc()) {
-        $products[] = $row;
-    }
-} else {
-    $error_message = "Không tìm thấy sản phẩm TPCN hoặc Vitamin nào trong database.";
-}
-
-// ================== 2. TRUY VẤN DỮ LIỆU CHO BỘ LỌC ĐỐI TƯỢNG ==================
-$sql_doituong = "SELECT madt, tendt FROM doituong ORDER BY tendt";
-$result_doituong = $conn->query($sql_doituong);
-$doituong_options = [];
-if ($result_doituong) {
-    while ($row = $result_doituong->fetch_assoc()) {
-        $doituong_options[] = $row;
-    }
-}
-
-// ================== 3. TRUY VẤN DỮ LIỆU CHO BỘ LỌC MÙI VỊ ==================
-$sql_muivi = "SELECT mamv, tenmv FROM muivi WHERE tenmv != 'Tất cả' ORDER BY tenmv";
-$result_muivi = $conn->query($sql_muivi);
-$muivi_options = [];
-if ($result_muivi) {
-    while ($row = $result_muivi->fetch_assoc()) {
-        $muivi_options[] = $row;
-    }
-}
-
-$conn->close();
+$stmt = $pdo->prepare($sql);
+$stmt->execute();
+$products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
+
+
 
     <link rel="stylesheet" href="static/css/product.css">
 
@@ -212,41 +160,18 @@ $conn->close();
       </div>
 
       <div class="product-grid">
-        <?php if (isset($error_message)): ?>
-            <p style="color: red; padding: 20px;"><?php echo $error_message; ?></p>
-        <?php elseif (!empty($products)): ?>
-            <?php foreach ($products as $product): 
-                $is_discount = $product['giagiam'] > 0;
-                $display_price = $is_discount ? $product['giaban'] - $product['giagiam'] : $product['giaban'];
-                $old_price = $product['giaban'];
-                $discount_percent = $is_discount ? round(($product['giagiam'] / $product['giaban']) * 100) : 0;
-                // Tạo liên kết đến trang chi tiết sản phẩm
-                $detail_link = "detailsproducts.php?masp=" . $product['masp'];
-                
-                // Xử lý đường dẫn ảnh, sử dụng đường dẫn tuyệt đối từ database nếu có, ngược lại dùng placeholder
-                $image_src = $product['hinhsp'] ? $base_url_for_images . $product['hinhsp'] : ($base_url_for_images . '/assets/img/placeholder.jpg');
-            ?>
-            <a href="<?php echo $detail_link; ?>" class="product-card">
-              <?php if ($is_discount): ?>
-                <span class="discount-badge">-<?php echo $discount_percent; ?>%</span>
-              <?php endif; ?>
-              <img src="<?php echo htmlspecialchars($image_src); ?>" 
-                   alt="<?php echo htmlspecialchars($product['tensp']); ?>">
-              <h3><?php echo htmlspecialchars($product['tensp']); ?></h3>
-              <p class="price">
-                  <?php echo format_price($display_price); ?> 
-                  <?php if ($is_discount): ?>
-                    <span class="old-price"><?php echo format_price($old_price); ?></span>
-                  <?php endif; ?>
-              </p>
-              <button class="btn-buy" onclick="window.location.href='<?php echo $detail_link; ?>'; return false;">
-                Chọn mua
-              </button>
-            </a>
-            <?php endforeach; ?>
-        <?php else: ?>
-            <p>Hiện chưa có sản phẩm nào được hiển thị.</p>
-        <?php endif; ?>
+        <?php foreach ($products as $sp): ?>
+    <div class='product-card'>
+        <img src='../uploads/<?= htmlspecialchars($sp['hinhanh']) ?>' alt='<?= htmlspecialchars($sp['tensp']) ?>'>
+        <h3><?= htmlspecialchars($sp['tensp']) ?></h3>
+        <p><?= htmlspecialchars($sp['tendm']) ?></p>
+        <p class='price'><?= number_format($sp['giaban'], 0, ',', '.') ?> ₫</p>
+        <a href='chitiet.php?masp=<?= $sp['masp'] ?>' class='btn'>Xem chi tiết</a>
+    </div>
+<?php endforeach; ?>
+</div>
+
+       
 
       </div>
     </div>

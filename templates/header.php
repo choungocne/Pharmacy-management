@@ -51,9 +51,11 @@ $href_map = [
         <div class="logo">
             <a href="<?= $base_url ?>/"><img src="<?= $base_url ?>/static/img/logo.png" alt="Logo"><span>An Tâm</span></a>
         </div>
-        <div class="search-bar">
-            <input type="text" placeholder="Tìm kiếm sản phẩm, thuốc, bệnh..."><button><i class="fas fa-search"></i></button>
-        </div>
+        <form action="<?= $base_url ?>/base.php" method="GET" class="search-bar">
+            <input type="hidden" name="page" value="search_results"> 
+            <input type="text" name="q" placeholder="Tìm kiếm sản phẩm, thuốc, bệnh..." required>
+            <button type="submit"><i class="fas fa-search"></i></button>
+        </form>
         <div class="user-actions">
             <a href="/login.php"><i class="fas fa-user"></i> Đăng nhập</a>
             <a href="#"><i class="fas fa-shopping-cart"></i> Giỏ hàng</a>
