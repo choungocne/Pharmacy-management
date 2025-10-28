@@ -1,78 +1,71 @@
 <?php
 // ================== 1. THIẾT LẬP KẾT NỐI DATABASE ==================
-$servername = "localhost";
-$username = "root";
-$password = "";            
-$dbname = "nhathuocantam"; 
-$conn = new mysqli($servername, $username, $password, $dbname);
+require_once __DIR__ . '/db.php'; // Include file db.php
 
-if ($conn->connect_error) {
-    die("Kết nối thất bại: " . $conn->connect_error);
-}
-$conn->set_charset("utf8mb4");
+$pdo = pdo(); // Sử dụng hàm pdo() từ db.php
 
 // LẤY MÃ SẢN PHẨM TỪ THAM SỐ URL (?masp=X)
-$masp_can_tim = isset($_GET['masp']) ? intval($_GET['masp']) : 1; 
+$masp_can_tim = isset($_GET['masp']) ? (int)$_GET['masp'] : 1;
 
-// Giả định $base_url được định nghĩa ở đây để xử lý ảnh, nếu ảnh được lưu
-// với đường dẫn tương đối (ví dụ: /uploads/sp/...)
-$BASE_URL_FOR_IMAGES = "/Pharmacy-management"; // HOẶC đường dẫn tới thư mục gốc chứa ảnh
+// Giả định $base_url được định nghĩa để xử lý ảnh
+$BASE_URL_FOR_IMAGES = "/pharmacy-management"; // Đường dẫn gốc chứa ảnh, khớp với products.php
 
 // ================== 2. TRUY VẤN DỮ LIỆU SẢN PHẨM ==================
-$sql = "SELECT 
-            tensp, giaban, giagiam, hinhsp, congdung, cachdung, requires_rx, trangthai,
-            thuonghieu, xuatxu, nhasanxuat, danhmuc, donvitinh,
-            thanhphan, dangbaoche, quycach, so_dksp, chidinh
-        FROM v_sanpham_chitiet 
-        WHERE masp = ?";
-        
-$stmt = $conn->prepare($sql);
+$sql = "
+SELECT 
+    sp.tensp, sp.giaban, sp.giagiam, sp.hinhsp, sp.congdung, sp.cachdung, 
+    sp.requires_rx, sp.trangthai, sp.xuatxu, sp.nhasanxuat, sp.thanhphan, 
+    sp.dangbaoche, sp.quycach, sp.so_dksp, sp.chidinh,
+    dm.tendm AS danhmuc, dv.tendv AS donvitinh, th.tenth AS thuonghieu
+FROM sanpham sp
+LEFT JOIN danhmuc dm ON dm.madm = sp.madm
+LEFT JOIN donvitinh dv ON dv.madv = sp.madv
+LEFT JOIN thuonghieu th ON th.math = sp.math
+WHERE sp.masp = :masp";
 
-if ($stmt === false) {
-    die("Lỗi SQL khi chuẩn bị truy vấn: " . $conn->error . "<br>Câu lệnh SQL: " . $sql);
-}
-
-$stmt->bind_param("i", $masp_can_tim); 
-$stmt->execute();
-$result = $stmt->get_result();
-$product_data = $result->fetch_assoc();
+$st = $pdo->prepare($sql);
+$st->bindValue(':masp', $masp_can_tim, PDO::PARAM_INT);
+$st->execute();
+$product_data = $st->fetch();
 
 if (!$product_data) {
     die("Sản phẩm không tồn tại.");
 }
 
-// Lấy danh sách ảnh phụ
-$sql_images = "SELECT mf.url, si.caption FROM sp_image si JOIN media_file mf ON si.file_id = mf.id WHERE si.masp = ? ORDER BY si.is_primary DESC, si.sort_order ASC";
-$stmt_images = $conn->prepare($sql_images);
-$stmt_images->bind_param("i", $masp_can_tim);
-$stmt_images->execute();
-$images_result = $stmt_images->get_result();
-$images = $images_result->fetch_all(MYSQLI_ASSOC);
-$stmt_images->close();
-
-$stmt->close();
-$conn->close();
+// Lấy danh sách ảnh phụ từ cột images (JSON)
+$images = [];
+if (!empty($product_data['hinhsp'])) {
+    $images[] = ['url' => $product_data['hinhsp'], 'caption' => $product_data['tensp']];
+}
+if (!empty($product_data['images'])) {
+    $json_images = json_decode($product_data['images'], true);
+    if (is_array($json_images)) {
+        foreach ($json_images as $img) {
+            $images[] = ['url' => $img, 'caption' => $product_data['tensp']];
+        }
+    }
+}
 
 // ================== 3. GÁN DỮ LIỆU & XỬ LÝ FORMAT ==================
 $tensp = htmlspecialchars($product_data['tensp']);
-$giaban = number_format($product_data['giaban'], 0, ',', '.') . '₫';
-$giagiam = number_format($product_data['giagiam'], 0, ',', '.') . '₫';
+$giaban = number_format((float)$product_data['giaban'], 0, ',', '.') . '₫';
+$giagiam = number_format((float)$product_data['giagiam'], 0, ',', '.') . '₫';
 
 // Xử lý đường dẫn ảnh chính: Thêm BASE_URL
-$hinhsp_main = $BASE_URL_FOR_IMAGES . htmlspecialchars($product_data['hinhsp']);
+$hinhsp_main = $BASE_URL_FOR_IMAGES . htmlspecialchars($product_data['hinhsp'] ?? '/uploads/sp/placeholder.jpg');
 
-$thuonghieu = htmlspecialchars($product_data['thuonghieu']);
-$nhasanxuat = htmlspecialchars($product_data['nhasanxuat']);
-$xuatxu = htmlspecialchars($product_data['xuatxu']);
+$thuonghieu = htmlspecialchars($product_data['thuonghieu'] ?? 'Đang cập nhật');
+$nhasanxuat = htmlspecialchars($product_data['nhasanxuat'] ?? 'Đang cập nhật');
+$xuatxu = htmlspecialchars($product_data['xuatxu'] ?? 'Đang cập nhật');
 $dangbaoche = htmlspecialchars($product_data['dangbaoche'] ?? 'Đang cập nhật');
 $quycach = htmlspecialchars($product_data['quycach'] ?? 'Đang cập nhật');
 $so_dksp = htmlspecialchars($product_data['so_dksp'] ?? 'Đang cập nhật');
 
 // Xử lý các trường mô tả
-$congdung = nl2br(htmlspecialchars($product_data['congdung']));
-$cachdung = nl2br(htmlspecialchars($product_data['cachdung']));
-$chidinh = nl2br(htmlspecialchars($product_data['chidinh']));
-$thanhphan = nl2br(htmlspecialchars($product_data['thanhphan'])); 
+$congdung = nl2br(htmlspecialchars($product_data['congdung'] ?? 'Đang cập nhật'));
+$cachdung = nl2br(htmlspecialchars($product_data['cachdung'] ?? 'Đang cập nhật'));
+$chidinh = nl2br(htmlspecialchars($product_data['chidinh'] ?? 'Đang cập nhật'));
+$thanhphan = nl2br(htmlspecialchars($product_data['thanhphan'] ?? 'Đang cập nhật'));
 ?>
 
 <!DOCTYPE html>
@@ -122,7 +115,6 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan']));
     </style>
 </head>
 <body>
-
     <div class="product-container">
         <div class="product-gallery">
             <div class="model-switcher">
@@ -137,8 +129,8 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan']));
             <div class="thumbnail-gallery">
                 <?php 
                 // Hiển thị tất cả ảnh liên quan
-                if (empty($images) || count($images) == 0) {
-                    // Mặc định nếu không có ảnh phụ
+                if (empty($images)) {
+                    // Mặc định nếu không có ảnh
                     echo '<img class="thumbnail active" src="' . $hinhsp_main . '" alt="Ảnh chính" data-full-src="' . $hinhsp_main . '">';
                     // Giả lập ảnh chi tiết
                     echo '<img class="thumbnail" src="' . $BASE_URL_FOR_IMAGES . '/assets/img/placeholder_70.jpg" alt="Ảnh thông tin" data-full-src="' . $BASE_URL_FOR_IMAGES . '/assets/img/placeholder_700.jpg">'; 
@@ -157,16 +149,16 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan']));
         <div class="product-details">
             <div class="product-header">
                 <span class="badge-official">CHÍNH HÃNG</span>
-                <span>Thương hiệu: **<?php echo $thuonghieu; ?>**</span>
+                <span>Thương hiệu: <b><?php echo $thuonghieu; ?></b></span>
                 <h1><?php echo $tensp; ?></h1>
-                <p>00021988 • <span style="color: gold;">★</span> 4.9 • 140 đánh giá • 1515 bình luận</p>
+                <p>000<?php echo $masp_can_tim; ?> • <span style="color: gold;">★</span> 4.9 • 140 đánh giá • 1515 bình luận</p>
             </div>
 
-            <div class="price">**<?php echo $giaban; ?>** / Hộp</div>
+            <div class="price"><b><?php echo $giaban; ?></b> / Hộp</div>
 
             <table class="info-table">
-                <tr><th>Tên chính hàng</th><td><?php echo $thuonghieu; ?></td></tr>
-                <tr><th>Danh mục</th><td><?php echo htmlspecialchars($product_data['danhmuc']); ?></td></tr>
+                <tr><th>Tên chính hãng</th><td><?php echo $thuonghieu; ?></td></tr>
+                <tr><th>Danh mục</th><td><?php echo htmlspecialchars($product_data['danhmuc'] ?? 'Khác'); ?></td></tr>
                 <tr><th>Số đăng ký</th><td><?php echo $so_dksp; ?></td></tr>
                 <tr><th>Dạng bào chế</th><td><?php echo $dangbaoche; ?></td></tr>
                 <tr><th>Quy cách</th><td><?php echo $quycach; ?></td></tr>
@@ -219,12 +211,11 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan']));
             <div class="description-section">
                 <h3>LƯU Ý</h3>
                 <p>
-                    Sản phẩm này là **<?php echo ($product_data['requires_rx'] ? 'Thuốc Kê Đơn (Requires Rx)' : 'Thuốc Không Kê Đơn/Thực Phẩm Chức Năng'); ?>**. 
+                    Sản phẩm này là <b><?php echo ($product_data['requires_rx'] ? 'Thuốc Kê Đơn (Requires Rx)' : 'Thuốc Không Kê Đơn/Thực Phẩm Chức Năng'); ?></b>. 
                     Đọc kỹ hướng dẫn sử dụng trước khi dùng. Nếu cần thêm thông tin, xin hỏi ý kiến bác sĩ hoặc dược sĩ.
                 </p>
             </div>
         </div>
-
     </div>
 
     <div id="productModal" class="modal">
@@ -232,13 +223,13 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan']));
         <img class="modal-content" id="modalImage" src="<?php echo $hinhsp_main; ?>" alt="<?php echo $tensp; ?> - Chi tiết">
 
         <div class="thumbnail-gallery" style="width: 80%; max-width: 700px; margin: 10px auto; justify-content: center;">
-             <?php 
-                // Hiển thị tất cả ảnh liên quan trong Modal
-                foreach ($images as $img) {
-                    $img_url = $BASE_URL_FOR_IMAGES . htmlspecialchars($img['url']);
-                    echo '<img class="thumbnail" onclick="changeModalImage(this)" src="' . $img_url . '" alt="' . htmlspecialchars($img['caption']) . '" data-modal-src="' . $img_url . '">';
-                }
-             ?>
+            <?php 
+            // Hiển thị tất cả ảnh liên quan trong Modal
+            foreach ($images as $img) {
+                $img_url = $BASE_URL_FOR_IMAGES . htmlspecialchars($img['url']);
+                echo '<img class="thumbnail" onclick="changeModalImage(this)" src="' . $img_url . '" alt="' . htmlspecialchars($img['caption']) . '" data-modal-src="' . $img_url . '">';
+            }
+            ?>
         </div>
     </div>
 

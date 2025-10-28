@@ -12,31 +12,26 @@ $lowThreshold = 10;   // tồn thấp
 $perPage      = max(1,(int)($_GET['per'] ?? 9));  // 3 cột x 3 hàng
 $page         = max(1,(int)($_GET['page'] ?? 1));
 
-/* ===== STATS (giữ như index) ===== */
+/* ===== STATS (giữ như index, nhưng điều chỉnh cho tonkho) ===== */
 $totalProducts   = (int)$pdo->query("SELECT COUNT(*) FROM sanpham")->fetchColumn();
-$expiredProducts = (int)$pdo->query("SELECT COUNT(DISTINCT masp) FROM lohang WHERE hsd < CURDATE() AND sl>0")->fetchColumn();
+$expiredProducts = (int)$pdo->query("SELECT COUNT(*) FROM tonkho WHERE hsd < CURDATE() AND soluong>0")->fetchColumn();
 $soonProducts    = (int)$pdo->query("
-  SELECT COUNT(DISTINCT masp) FROM lohang
-  WHERE hsd >= CURDATE() AND hsd <= DATE_ADD(CURDATE(), INTERVAL $soonDays DAY) AND sl>0
+  SELECT COUNT(*) FROM tonkho
+  WHERE hsd >= CURDATE() AND hsd <= DATE_ADD(CURDATE(), INTERVAL $soonDays DAY) AND soluong>0
 ")->fetchColumn();
 $lowStock        = (int)$pdo->query("
-  SELECT COUNT(*) FROM (SELECT masp, SUM(sl) ton FROM lohang GROUP BY masp) t
-  WHERE ton>0 AND ton <= $lowThreshold
+  SELECT COUNT(*) FROM tonkho
+  WHERE soluong>0 AND soluong <= $lowThreshold
 ")->fetchColumn();
 
-/* ===== FILTER LIST (danh mục) ===== */
-$cats = $pdo->query("SELECT madm,tendm FROM danhmuc ORDER BY tendm")->fetchAll();
+/* ===== FILTER LIST (danh mục - chỉ lấy cap=3 để khớp schema) ===== */
+$cats = $pdo->query("SELECT madm,tendm FROM danhmuc WHERE cap=3 ORDER BY tendm")->fetchAll();
 
-/* ===== TOTAL FILTERED (để phân trang) ===== */
+/* ===== TOTAL FILTERED (để phân trang - loại bỏ group vì tonkho là 1-1) ===== */
 $countSql = "
-SELECT COUNT(*) FROM (
-  SELECT sp.masp
-  FROM sanpham sp
-  LEFT JOIN lohang lh ON lh.masp=sp.masp
-  WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
-    AND (:dm=0 OR sp.madm=:dm)
-  GROUP BY sp.masp
-) x";
+SELECT COUNT(*) FROM sanpham sp
+WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
+  AND (:dm=0 OR sp.madm=:dm)";
 $cst = $pdo->prepare($countSql);
 $cst->execute([':q'=>$q, ':dm'=>$dm]);
 $totalFiltered = (int)$cst->fetchColumn();
@@ -45,7 +40,7 @@ $pages = max(1, (int)ceil($totalFiltered / $perPage));
 if ($page > $pages) $page = $pages;
 $offset = ($page - 1) * $perPage;
 
-/* ===== DATA PAGE ===== */
+/* ===== DATA PAGE (điều chỉnh cho tonkho) ===== */
 $sql = "
 SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam,
        REPLACE(
@@ -54,16 +49,15 @@ SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam,
            '/pharmacy-management/'
        ) AS image,
        dm.tendm, dv.tendv,
-       SUM(CASE WHEN lh.hsd < CURDATE()  AND lh.sl>0 THEN lh.sl ELSE 0 END) AS sl_het_han,
-       MIN(CASE WHEN lh.sl>0 THEN lh.hsd END)                           AS hsd_gan_nhat,
-       SUM(lh.sl) AS ton
+       CASE WHEN tk.hsd < CURDATE()  AND tk.soluong>0 THEN tk.soluong ELSE 0 END AS sl_het_han,
+       CASE WHEN tk.soluong>0 THEN tk.hsd END                           AS hsd_gan_nhat,
+       tk.soluong AS ton
 FROM sanpham sp
 LEFT JOIN danhmuc  dm ON dm.madm=sp.madm
 LEFT JOIN donvitinh dv ON dv.madv=sp.madv
-LEFT JOIN lohang   lh ON lh.masp=sp.masp
+LEFT JOIN tonkho   tk ON tk.masp=sp.masp
 WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
   AND (:dm=0 OR sp.madm=:dm)
-GROUP BY sp.masp
 ORDER BY sp.tensp
 LIMIT :lim OFFSET :off";
 $st=$pdo->prepare($sql);

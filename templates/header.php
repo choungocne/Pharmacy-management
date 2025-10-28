@@ -1,30 +1,34 @@
 <?php
-// --- Kết nối CSDL ---
-$pdo = new PDO(
-  'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
-  [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
-);
+// ==========================================
+// TỆP: header.php
+// ==========================================
 
-// *** THÊM DÒNG NÀY ***
-$base_url = '/Pharmacy-management'; // Thêm base_url để các link logo/trang chủ hoạt động
+// --- YÊU CẦU KẾT NỐI CSDL VÀ HÀM HỖ TRỢ ---
+// Sử dụng hàm pdo() và money_vn() từ db.php
+if (!function_exists('pdo')) {
+    // Nếu chưa được include, include nó (Giả định db.php nằm cùng cấp hoặc có thể truy cập)
+    require_once 'db.php'; 
+}
+
+// --- THIẾT LẬP BASE URL ---
+$base_url = '/Pharmacy-management'; 
 
 // --- Lấy danh mục cấp 1 ---
+$pdo = pdo(); // Gọi hàm pdo() để lấy kết nối
 $sql_lv1 = "SELECT * FROM danhmuc WHERE cap = 1 ORDER BY madm";
 $stmt1 = $pdo->query($sql_lv1);
 $menu_lv1 = $stmt1->fetchAll(PDO::FETCH_ASSOC);
+
+// Map tên danh mục cấp 1 tới trang PHP đích
 $href_map = [
     'Thực phẩm chức năng' => 'base.php?page=thucpham',
-    'Thuốc'               => 'base.php?page=search',
+    'Thuốc'               => 'base.php?page=search', // Trang tra cứu chung
     'Thiết bị y tế'       => 'base.php?page=thietbi',
-    'Tra cứu bệnh'        => 'base.php?page=search',
+    'Tra cứu bệnh'        => 'base.php?page=search_disease',
     'Bệnh & Góc sức khỏe'=> 'base.php?page=suckhoe',
     'Hệ thống nhà thuốc'  => 'base.php?page=about'
 ];
 ?>
-
-
-
-
 
 <div class="header-bar">
     <div class="header-bar-content">
@@ -49,10 +53,10 @@ $href_map = [
 <header class="main-header">
     <div class="header-top">
         <div class="logo">
-            <a href="<?= $base_url ?>/"><img src="<?= $base_url ?>/static/img/logo.png" alt="Logo"><span>An Tâm</span></a>
+            <a href="<?= $base_url ?>/base.php?page=home"><img src="<?= $base_url ?>/static/img/logo.png" alt="Logo"><span>An Tâm</span></a>
         </div>
         <form action="<?= $base_url ?>/base.php" method="GET" class="search-bar">
-            <input type="hidden" name="page" value="search_results"> 
+            <input type="hidden" name="page" value="search_results_drug"> 
             <input type="text" name="q" placeholder="Tìm kiếm sản phẩm, thuốc, bệnh..." required>
             <button type="submit"><i class="fas fa-search"></i></button>
         </form>
@@ -73,10 +77,12 @@ $href_map = [
                 $stmt2 = $pdo->prepare("SELECT * FROM danhmuc WHERE parent_id = ? ORDER BY madm");
                 $stmt2->execute([$lv1['madm']]);
                 $menu_lv2 = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+                
+                $link_lv1 = htmlspecialchars($href_map[$lv1['tendm']] ?? '#');
                 ?>
 
                 <li class="nav-item">
-                    <a href="<?= htmlspecialchars($href_map[$lv1['tendm']] ?? '#') ?>">
+                    <a href="<?= $link_lv1 ?>">
                         <?= htmlspecialchars($lv1['tendm']) ?>
                         <?php if ($menu_lv2): ?><i class="fas fa-chevron-down"></i><?php endif; ?>
                     </a>
@@ -84,10 +90,27 @@ $href_map = [
                     <?php if ($menu_lv2): ?>
                         <div class="dropdown-menu">
                             <?php foreach ($menu_lv2 as $lv2): ?>
-                               
-                                <a href="<?= $base_url ?>/base.php?page=danhmuc&madm=<?= $lv2['madm'] ?>" class="dropdown-item">
+                                <?php
+                                $lv2_tendm = $lv2['tendm'];
+                                $lv2_link = $base_url . '/base.php?page=danhmuc&madm=' . $lv2['madm'];
+                                
+                                // LOGIC SỬA ĐỔI: Chuyển hướng các mục Tra cứu đến trang search.php với filter tương ứng
+                                if ($lv1['tendm'] == 'Thuốc') {
+                                    if (strpos($lv2_tendm, 'Tra cứu thuốc') !== false) {
+                                        $lv2_link = $base_url . '/base.php?page=search&filter=thuoc';
+                                    } elseif (strpos($lv2_tendm, 'Tra cứu dược chất') !== false) {
+                                        $lv2_link = $base_url . '/base.php?page=search&filter=duocchat';
+                                    } elseif (strpos($lv2_tendm, 'Tra cứu dược liệu') !== false) {
+                                        $lv2_link = $base_url . '/base.php?page=search&filter=duoclieu';
+                                    } else {
+                                        // Các danh mục cấp 3 của thuốc (nhóm trị liệu)
+                                        $lv2_link = $base_url . '/base.php?page=danhmuc&madm=' . $lv2['madm'];
+                                    }
+                                }
+                                ?>
+                                <a href="<?= $lv2_link ?>" class="dropdown-item">
                                     <?php if (!empty($lv2['img_url'])): ?>
-                                        <img src="<?= htmlspecialchars($lv2['img_url']) ?>" alt="<?= htmlspecialchars($lv2['tendm']) ?>">
+                                        <img src="<?= $base_url ?>/<?= htmlspecialchars($lv2['img_url']) ?>" alt="<?= htmlspecialchars($lv2['tendm']) ?>">
                                     <?php endif; ?>
                                     <?= htmlspecialchars($lv2['tendm']) ?>
                                 </a>
