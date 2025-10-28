@@ -61,7 +61,7 @@ $href_map = [
             <button type="submit"><i class="fas fa-search"></i></button>
         </form>
         <div class="user-actions">
-            <a href="/login.php"><i class="fas fa-user"></i> Đăng nhập</a>
+            <a href="login.php"><i class="fas fa-user"></i> Đăng nhập</a>
             <a href="#"><i class="fas fa-shopping-cart"></i> Giỏ hàng</a>
             <a href="#"><i class="fas fa-headset"></i> Hỗ trợ</a>
         </div>
