@@ -1,5 +1,5 @@
 <?php
-// admin/products.php
+// admin/products.php - Tích hợp API
 $pdo = new PDO(
   'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
   [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
@@ -12,7 +12,31 @@ $lowThreshold = 10;   // tồn thấp
 $perPage      = max(1,(int)($_GET['per'] ?? 9));  // 3 cột x 3 hàng
 $page         = max(1,(int)($_GET['page'] ?? 1));
 
-/* ===== STATS (giữ như index, nhưng điều chỉnh cho tonkho) ===== */
+// Hàm gọi API
+function callAPI($endpoint, $params = []) {
+    $baseURL = 'http://localhost/pharmacy-management/api/products.php';
+    $url = $baseURL . $endpoint;
+    
+    if (!empty($params)) {
+        $url .= '?' . http_build_query($params);
+    }
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response) {
+        return json_decode($response, true);
+    }
+    
+    return null;
+}
+
+/* ===== STATS (giữ như cũ vì API chưa có endpoint stats) ===== */
 $totalProducts   = (int)$pdo->query("SELECT COUNT(*) FROM sanpham")->fetchColumn();
 $expiredProducts = (int)$pdo->query("SELECT COUNT(*) FROM tonkho WHERE hsd < CURDATE() AND soluong>0")->fetchColumn();
 $soonProducts    = (int)$pdo->query("
@@ -24,49 +48,92 @@ $lowStock        = (int)$pdo->query("
   WHERE soluong>0 AND soluong <= $lowThreshold
 ")->fetchColumn();
 
-/* ===== FILTER LIST (danh mục - chỉ lấy cap=3 để khớp schema) ===== */
+/* ===== FILTER LIST (danh mục) ===== */
 $cats = $pdo->query("SELECT madm,tendm FROM danhmuc WHERE cap=3 ORDER BY tendm")->fetchAll();
 
-/* ===== TOTAL FILTERED (để phân trang - loại bỏ group vì tonkho là 1-1) ===== */
-$countSql = "
-SELECT COUNT(*) FROM sanpham sp
-WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
-  AND (:dm=0 OR sp.madm=:dm)";
-$cst = $pdo->prepare($countSql);
-$cst->execute([':q'=>$q, ':dm'=>$dm]);
-$totalFiltered = (int)$cst->fetchColumn();
+/* ===== LẤY DỮ LIỆU TỪ API ===== */
+$apiParams = [
+    'q' => $q,
+    'dm' => $dm,
+    'per' => $perPage,
+    'page' => $page
+];
 
-$pages = max(1, (int)ceil($totalFiltered / $perPage));
-if ($page > $pages) $page = $pages;
+$apiResponse = callAPI('', $apiParams);
+
+if ($apiResponse && isset($apiResponse['data'])) {
+    $totalFiltered = $apiResponse['total'];
+    $pages = $apiResponse['pages'];
+    $page = $apiResponse['current_page'];
+    $rows = $apiResponse['data'];
+    
+    // Xử lý dữ liệu để tương thích với UI cũ
+    foreach ($rows as &$r) {
+        // Chuyển đổi các trường để khớp với UI
+        $r['tendv'] = $r['donvitinh'] ?? '';
+        $r['ton'] = $r['tonkho'] ?? 0;
+        
+        // Xử lý hình ảnh
+        if (empty($r['hinhsp'])) {
+            $r['image'] = '/pharmacy-management/uploads/sp/placeholder.jpg';
+        } else {
+            $r['image'] = str_replace('/Pharmacy-management/', '/pharmacy-management/', $r['hinhsp']);
+        }
+        
+        // Tính số lượng hết hạn
+        if (!empty($r['hsd']) && strtotime($r['hsd']) < time() && $r['tonkho'] > 0) {
+            $r['sl_het_han'] = $r['tonkho'];
+        } else {
+            $r['sl_het_han'] = 0;
+        }
+        
+        // HSD gần nhất
+        $r['hsd_gan_nhat'] = (!empty($r['hsd']) && $r['tonkho'] > 0) ? $r['hsd'] : null;
+    }
+    unset($r);
+} else {
+    // Fallback về truy vấn trực tiếp nếu API lỗi
+    $countSql = "
+    SELECT COUNT(*) FROM sanpham sp
+    WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
+      AND (:dm=0 OR sp.madm=:dm)";
+    $cst = $pdo->prepare($countSql);
+    $cst->execute([':q'=>$q, ':dm'=>$dm]);
+    $totalFiltered = (int)$cst->fetchColumn();
+
+    $pages = max(1, (int)ceil($totalFiltered / $perPage));
+    if ($page > $pages) $page = $pages;
+    $offset = ($page - 1) * $perPage;
+
+    $sql = "
+    SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam,
+           REPLACE(
+               COALESCE(sp.hinhsp, '/Pharmacy-management/uploads/sp/placeholder.jpg'),
+               '/Pharmacy-management/',
+               '/pharmacy-management/'
+           ) AS image,
+           dm.tendm, dv.tendv,
+           CASE WHEN tk.hsd < CURDATE()  AND tk.soluong>0 THEN tk.soluong ELSE 0 END AS sl_het_han,
+           CASE WHEN tk.soluong>0 THEN tk.hsd END                           AS hsd_gan_nhat,
+           tk.soluong AS ton
+    FROM sanpham sp
+    LEFT JOIN danhmuc  dm ON dm.madm=sp.madm
+    LEFT JOIN donvitinh dv ON dv.madv=sp.madv
+    LEFT JOIN tonkho   tk ON tk.masp=sp.masp
+    WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
+      AND (:dm=0 OR sp.madm=:dm)
+    ORDER BY sp.tensp
+    LIMIT :lim OFFSET :off";
+    $st=$pdo->prepare($sql);
+    $st->bindValue(':q',$q);
+    $st->bindValue(':dm',$dm,PDO::PARAM_INT);
+    $st->bindValue(':lim',$perPage,PDO::PARAM_INT);
+    $st->bindValue(':off',$offset,PDO::PARAM_INT);
+    $st->execute();
+    $rows=$st->fetchAll();
+}
+
 $offset = ($page - 1) * $perPage;
-
-/* ===== DATA PAGE (điều chỉnh cho tonkho) ===== */
-$sql = "
-SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam,
-       REPLACE(
-           COALESCE(sp.hinhsp, '/Pharmacy-management/uploads/sp/placeholder.jpg'),
-           '/Pharmacy-management/',
-           '/pharmacy-management/'
-       ) AS image,
-       dm.tendm, dv.tendv,
-       CASE WHEN tk.hsd < CURDATE()  AND tk.soluong>0 THEN tk.soluong ELSE 0 END AS sl_het_han,
-       CASE WHEN tk.soluong>0 THEN tk.hsd END                           AS hsd_gan_nhat,
-       tk.soluong AS ton
-FROM sanpham sp
-LEFT JOIN danhmuc  dm ON dm.madm=sp.madm
-LEFT JOIN donvitinh dv ON dv.madv=sp.madv
-LEFT JOIN tonkho   tk ON tk.masp=sp.masp
-WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
-  AND (:dm=0 OR sp.madm=:dm)
-ORDER BY sp.tensp
-LIMIT :lim OFFSET :off";
-$st=$pdo->prepare($sql);
-$st->bindValue(':q',$q);
-$st->bindValue(':dm',$dm,PDO::PARAM_INT);
-$st->bindValue(':lim',$perPage,PDO::PARAM_INT);
-$st->bindValue(':off',$offset,PDO::PARAM_INT);
-$st->execute();
-$rows=$st->fetchAll();
 
 /* helper build url */
 function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SELF']).'?'.http_build_query(['q'=>$q,'dm'=>$dm,'page'=>$page,'per'=>$per]); }
@@ -86,6 +153,9 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
     .card:hover{transform:translateY(-3px); box-shadow:0 16px 30px rgba(2,6,23,.10)}
     .pill{box-shadow: inset 0 0 0 1px rgba(2,6,23,.08)}
     .stat{box-shadow:0 12px 30px rgba(59,130,246,.08)}
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center}
+    .modal.active{display:flex}
+    .modal-content{background:white;border-radius:1rem;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;padding:2rem}
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -96,6 +166,11 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
     <header class="sticky top-0 z-20 glass border-b border-slate-200">
       <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <h1 class="text-3xl font-extrabold tracking-tight">Quản lý Sản phẩm</h1>
+        <div class="flex gap-2 items-center">
+        <button onclick="openAddModal()" class="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition flex items-center gap-2">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m7-7H5"/></svg>
+          Thêm sản phẩm
+        </button>
         <form method="get" class="flex gap-2 items-center">
           <div class="relative">
             <input name="q" value="<?=htmlspecialchars($q)?>" placeholder="Tìm kiếm sản phẩm…"
@@ -111,6 +186,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
           <input type="hidden" name="per" value="<?=$perPage?>">
           <button class="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition">Lọc</button>
         </form>
+        </div>
       </div>
     </header>
 
@@ -185,8 +261,10 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
               <div class="mt-3 flex gap-2">
                 <a href="/pharmacy-management/product_detail.php?masp=<?=$r['masp']?>"
                    class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm transition">Xem</a>
-                <a href="#"
-                   class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</a>
+                <button onclick="openEditModal(<?=$r['masp']?>)"
+                   class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</button>
+                <button onclick="deleteProduct(<?=$r['masp']?>)"
+                   class="px-3 py-1.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm transition">Xóa</button>
               </div>
             </div>
           </div>
@@ -197,7 +275,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
       <div class="mt-8 flex items-center justify-between">
         <div class="text-sm text-slate-600">
           Hiển thị
-          <b><?=min($totalFiltered, $offset+1)?></b>–
+          <b><?=min($totalFiltered, $offset+1)?></b>—
           <b><?=min($totalFiltered, $offset + count($rows))?></b>
           / <b><?=$totalFiltered?></b> sản phẩm
         </div>
@@ -208,7 +286,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
           <?php endif; ?>
 
           <?php
-            $win = 2; // số trang hai bên
+            $win = 2;
             $start = max(1, $page-$win);
             $end   = min($pages, $page+$win);
             if ($start>1) {
@@ -235,7 +313,202 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
   </main>
 </div>
 
+<!-- Modal Thêm/Sửa -->
+<div id="productModal" class="modal">
+  <div class="modal-content">
+    <div class="flex justify-between items-center mb-6">
+      <h2 id="modalTitle" class="text-2xl font-bold">Thêm sản phẩm</h2>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 6-12 12m0-12 12 12"/></svg>
+      </button>
+    </div>
+    
+    <form id="productForm" class="space-y-4">
+      <input type="hidden" id="productId">
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Tên sản phẩm <span class="text-red-500">*</span></label>
+        <input type="text" id="tensp" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+      </div>
+      
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Giá bán <span class="text-red-500">*</span></label>
+          <input type="number" id="giaban" required min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Giá giảm</label>
+          <input type="number" id="giagiam" min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        </div>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Danh mục <span class="text-red-500">*</span></label>
+        <select id="madm" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+          <option value="">-- Chọn danh mục --</option>
+          <?php foreach($cats as $c): ?>
+            <option value="<?=$c['madm']?>"><?=$c['tendm']?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Hình ảnh (URL)</label>
+        <input type="text" id="hinhsp" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Công dụng</label>
+        <textarea id="congdung" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Xuất xứ</label>
+        <input type="text" id="xuatxu" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Cách dùng</label>
+        <textarea id="cachdung" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
+      </div>
+      
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="requires_rx" class="w-4 h-4">
+        <label for="requires_rx" class="text-sm">Yêu cầu đơn thuốc</label>
+      </div>
+      
+      <div class="flex gap-3 pt-4">
+        <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+          Lưu
+        </button>
+        <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+          Hủy
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
+const API_URL = 'http://localhost/pharmacy-management/api/products.php';
+
+// Mở modal thêm
+function openAddModal() {
+  document.getElementById('modalTitle').textContent = 'Thêm sản phẩm';
+  document.getElementById('productForm').reset();
+  document.getElementById('productId').value = '';
+  document.getElementById('productModal').classList.add('active');
+}
+
+// Mở modal sửa
+async function openEditModal(id) {
+  try {
+    const response = await fetch(`${API_URL}/${id}`);
+    const product = await response.json();
+    
+    if (product.error) {
+      alert('Không tìm thấy sản phẩm!');
+      return;
+    }
+    
+    document.getElementById('modalTitle').textContent = 'Sửa sản phẩm';
+    document.getElementById('productId').value = product.masp;
+    document.getElementById('tensp').value = product.tensp || '';
+    document.getElementById('giaban').value = product.giaban || '';
+    document.getElementById('giagiam').value = product.giagiam || '';
+    document.getElementById('madm').value = product.madm || '';
+    document.getElementById('hinhsp').value = product.hinhsp || '';
+    document.getElementById('congdung').value = product.congdung || '';
+    document.getElementById('xuatxu').value = product.xuatxu || '';
+    document.getElementById('cachdung').value = product.cachdung || '';
+    document.getElementById('requires_rx').checked = product.requires_rx == 1;
+    
+    document.getElementById('productModal').classList.add('active');
+  } catch (error) {
+    alert('Lỗi khi tải dữ liệu: ' + error.message);
+  }
+}
+
+// Đóng modal
+function closeModal() {
+  document.getElementById('productModal').classList.remove('active');
+}
+
+// Xử lý form submit
+document.getElementById('productForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const id = document.getElementById('productId').value;
+  const data = {
+    tensp: document.getElementById('tensp').value,
+    giaban: document.getElementById('giaban').value,
+    giagiam: document.getElementById('giagiam').value || 0,
+    madm: document.getElementById('madm').value,
+    hinhsp: document.getElementById('hinhsp').value,
+    congdung: document.getElementById('congdung').value,
+    xuatxu: document.getElementById('xuatxu').value,
+    cachdung: document.getElementById('cachdung').value,
+    requires_rx: document.getElementById('requires_rx').checked ? 1 : 0
+  };
+  
+  try {
+    let response;
+    if (id) {
+      // Sửa
+      response = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } else {
+      // Thêm
+      response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(id ? 'Cập nhật thành công!' : 'Thêm sản phẩm thành công!');
+      closeModal();
+      location.reload();
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không xác định'));
+    }
+  } catch (error) {
+    alert('Lỗi kết nối: ' + error.message);
+  }
+});
+
+// Xóa sản phẩm
+async function deleteProduct(id) {
+  if (!confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
+  
+  try {
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'DELETE'
+    });
+    const result = await response.json();
+    
+    if (result.success) {
+      alert('Xóa thành công!');
+      location.reload();
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không xác định'));
+    }
+  } catch (error) {
+    alert('Lỗi kết nối: ' + error.message);
+  }
+}
+
+// Đóng modal khi click bên ngoài
+document.getElementById('productModal').addEventListener('click', (e) => {
+  if (e.target.id === 'productModal') closeModal();
+});
+
 document.querySelectorAll('[data-count]').forEach(el=>{
   const target=+el.dataset.count; let v=0, step=Math.max(1, Math.round(target/30));
   const tick=()=>{ v+=step; if(v>target) v=target; el.textContent=new Intl.NumberFormat('vi-VN').format(v); if(v<target) requestAnimationFrame(tick); };
