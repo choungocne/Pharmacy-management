@@ -357,7 +357,7 @@ if (!empty($product_mamv_ids)) {
                                     <span class="discount-badge">-<?= $discount_percent ?>%</span>
                                 <?php endif; ?>
 
-                                <img src="<?= $base_url ?><?= htmlspecialchars($product['hinhsp'] ?? '/static/img/placeholder.jpg') ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
+                                <img src="<?= htmlspecialchars($product['hinhsp'] ?? '/static/img/placeholder.jpg') ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
                                 <h3><?= htmlspecialchars($product['tensp']) ?></h3>
                                 <p class="price">
                                     <?= money_vn($final_price) ?> đ

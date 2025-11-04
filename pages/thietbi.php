@@ -164,7 +164,7 @@ $muivi_options = [['mamv'=>1, 'tenmv'=>'Không mùi'], ['mamv'=>2, 'tenmv'=>'V�
 
                 $detail_link = $base_url . "/base.php?page=detailsproducts&masp=" . ($sp['masp'] ?? '');
                 // Dùng cột 'hinhsp' theo schema, thêm $base_url
-                $image_src = ($sp['hinhsp'] ?? '') ? $base_url . $sp['hinhsp'] : ($base_url . '/static/img/placeholder.jpg');
+                $image_src = ($sp['hinhsp'] ?? '') ?  $sp['hinhsp'] : ( '/static/img/placeholder.jpg');
             ?>
                 <a href='<?= htmlspecialchars($detail_link) ?>' class='product-card'>
                     <?php if ($is_discount): ?>
