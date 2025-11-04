@@ -253,89 +253,8 @@ if (!empty($product_mamv_ids)) {
         margin: 4px 0 0 0;
     }
     
-    /* --- LƯỚI SẢN PHẨM --- */
-    .product-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 16px;
-        /* Thêm hiệu ứng khi tải lại */
-        transition: opacity 0.3s;
-    }
-    /* Thêm class này khi đang tải */
-    .product-grid.loading {
-        opacity: 0.5;
-    }
-
-    .product-card {
-        background-color: #fff;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        overflow: hidden;
-        text-decoration: none;
-        color: #333;
-        transition: box-shadow 0.3s;
-        position: relative;
-        padding: 12px;
-        display: flex;
-        flex-direction: column;
-    }
-    .product-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .product-card img {
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        object-fit: contain;
-        margin-bottom: 12px;
-    }
-    .product-card h3 {
-        font-size: 14px;
-        font-weight: 500;
-        margin: 0 0 8px 0;
-        height: 40px; /* 2 dòng */
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-    }
-    .product-card .price {
-        font-size: 16px;
-        font-weight: 600;
-        color: #d9534f;
-        margin: 0 0 4px 0;
-    }
-    .product-card .old-price {
-        font-size: 13px;
-        color: #777;
-        text-decoration: line-through;
-        margin-left: 8px;
-    }
-    .product-card .discount-badge {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background-color: #d9534f;
-        color: white;
-        font-size: 12px;
-        font-weight: 600;
-        padding: 4px 6px;
-        border-radius: 4px;
-    }
-    .product-card .btn-buy {
-        display: block;
-        width: 100%;
-        background-color: #004aad;
-        color: white;
-        border: none;
-        padding: 10px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 500;
-        text-align: center;
-        margin-top: auto; /* Đẩy nút xuống dưới cùng */
-    }
 </style>
+   <link rel="stylesheet" href="static/css/product.css">
 
 <div class="container">
 
@@ -424,7 +343,8 @@ if (!empty($product_mamv_ids)) {
                         <p>Chưa có sản phẩm nào trong danh mục này.</p>
                     <?php else: ?>
                         <?php foreach ($products as $product): ?>
-                            <a href="<?= $base_url ?>/base.php?page=product_detail&id=<?= $product['masp'] ?>" class="product-card">
+
+                            <a href="Pharmacy-management/base.php?page=detailsproducts&masp=<?= urlencode($sp['masp']) ?>" class="product-card">
                                 <?php 
                                 $discount_percent = 0;
                                 $final_price = $product['giaban'];
@@ -445,7 +365,7 @@ if (!empty($product_mamv_ids)) {
                                         <span class="old-price"><?= money_vn($product['giaban']) ?>đ</span>
                                     <?php endif; ?>
                                 </p>
-                                <button class="btn-buy">Xem chi tiết</button>
+                                <button class="btn-buy">Chọn mua</button>
                             </a>
                         <?php endforeach; ?>
                     <?php endif; ?>

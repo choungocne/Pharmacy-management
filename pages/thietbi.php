@@ -161,8 +161,8 @@ $muivi_options = [['mamv'=>1, 'tenmv'=>'Không mùi'], ['mamv'=>2, 'tenmv'=>'V�
                 $display_price = (float)($sp['giaban'] ?? 0) - (float)($sp['giagiam'] ?? 0);
                 $old_price = (float)($sp['giaban'] ?? 0);
                 $discount_percent = $is_discount ? round((($sp['giagiam'] ?? 0) / ($sp['giaban'] ?? 1)) * 100) : 0;
-                
-                $detail_link = $base_url . "/detailsproducts.php?masp=" . ($sp['masp'] ?? '');
+
+                $detail_link = $base_url . "/base.php?page=detailsproducts&masp=" . ($sp['masp'] ?? '');
                 // Dùng cột 'hinhsp' theo schema, thêm $base_url
                 $image_src = ($sp['hinhsp'] ?? '') ? $base_url . $sp['hinhsp'] : ($base_url . '/static/img/placeholder.jpg');
             ?>
