@@ -73,10 +73,14 @@ if ($apiResponse && isset($apiResponse['data'])) {
         $r['tendv'] = $r['donvitinh'] ?? '';
         $r['ton'] = $r['tonkho'] ?? 0;
         
-        // Xử lý hình ảnh
+        // Xử lý hình ảnh: Đảm bảo prefix đúng và thay thế chữ hoa/thường
         if (empty($r['hinhsp'])) {
             $r['image'] = '/pharmacy-management/uploads/sp/placeholder.jpg';
         } else {
+            // Thêm prefix nếu chưa có (giả sử SQL lưu chỉ tên file, nhưng nếu đã có prefix thì giữ nguyên)
+            if (!str_starts_with($r['hinhsp'], '/Pharmacy-management/uploads/sp/')) {
+                $r['hinhsp'] = '/Pharmacy-management/uploads/sp/' . $r['hinhsp'];
+            }
             $r['image'] = str_replace('/Pharmacy-management/', '/pharmacy-management/', $r['hinhsp']);
         }
         
@@ -131,6 +135,14 @@ if ($apiResponse && isset($apiResponse['data'])) {
     $st->bindValue(':off',$offset,PDO::PARAM_INT);
     $st->execute();
     $rows=$st->fetchAll();
+    
+    // Sửa thêm ở fallback: Thêm prefix nếu cần
+    foreach ($rows as &$r) {
+        if (!str_starts_with($r['image'], '/pharmacy-management/uploads/sp/')) {
+            $r['image'] = '/pharmacy-management/uploads/sp/' . basename($r['image']);
+        }
+    }
+    unset($r);
 }
 
 $offset = ($page - 1) * $perPage;
@@ -353,8 +365,9 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
       </div>
       
       <div>
-        <label class="block text-sm font-medium mb-1">Hình ảnh (URL)</label>
-        <input type="text" id="hinhsp" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <label class="block text-sm font-medium mb-1">Tên file hình ảnh (sẽ tự thêm /Pharmacy-management/uploads/sp/ ở đầu) </label>
+        <input type="text" id="hinhsp" placeholder="example.jpg" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <p class="text-xs text-slate-500 mt-1">Ví dụ: Nếu nhập "example.jpg", sẽ lưu thành "/Pharmacy-management/uploads/sp/example.jpg"</p>
       </div>
       
       <div>
@@ -391,6 +404,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
 
 <script>
 const API_URL = 'http://localhost/pharmacy-management/api/products.php';
+const IMAGE_PREFIX = '/Pharmacy-management/uploads/sp/';
 
 // Mở modal thêm
 function openAddModal() {
@@ -417,7 +431,8 @@ async function openEditModal(id) {
     document.getElementById('giaban').value = product.giaban || '';
     document.getElementById('giagiam').value = product.giagiam || '';
     document.getElementById('madm').value = product.madm || '';
-    document.getElementById('hinhsp').value = product.hinhsp || '';
+    // Sửa: Chỉ hiển thị phần sau prefix (tên file)
+    document.getElementById('hinhsp').value = (product.hinhsp || '').replace(IMAGE_PREFIX, '');
     document.getElementById('congdung').value = product.congdung || '';
     document.getElementById('xuatxu').value = product.xuatxu || '';
     document.getElementById('cachdung').value = product.cachdung || '';
@@ -439,12 +454,19 @@ document.getElementById('productForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   
   const id = document.getElementById('productId').value;
+  let hinhsp = document.getElementById('hinhsp').value.trim();
+  
+  // Sửa: Tự động thêm prefix nếu có giá trị hinhsp
+  if (hinhsp) {
+    hinhsp = IMAGE_PREFIX + hinhsp;
+  }
+  
   const data = {
     tensp: document.getElementById('tensp').value,
     giaban: document.getElementById('giaban').value,
     giagiam: document.getElementById('giagiam').value || 0,
     madm: document.getElementById('madm').value,
-    hinhsp: document.getElementById('hinhsp').value,
+    hinhsp: hinhsp,  // Đã thêm prefix
     congdung: document.getElementById('congdung').value,
     xuatxu: document.getElementById('xuatxu').value,
     cachdung: document.getElementById('cachdung').value,
