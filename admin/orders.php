@@ -17,20 +17,70 @@ $today = (new DateTime())->format('Y-m-d');
 $first = (new DateTime('first day of this month'))->format('Y-m-d');
 $d1 = $_GET['d1'] ?? $first;
 $d2 = $_GET['d2'] ?? $today;
+/* ====== Helpers: tính tiền đơn từ JSON chitiet ====== */
+function enrich_with_money(&$rows, PDO $pdo): void {
+  $ids = [];
+  foreach ($rows as $r) {
+    $items = json_decode($r['chitiet'] ?? '[]', true) ?: [];
+    foreach ($items as $it) if (isset($it['masp'])) $ids[(int)$it['masp']] = true;
+  }
+  $price = [];
+  if ($ids) {
+    $in = implode(',', array_map('intval', array_keys($ids)));
+    $sql = "SELECT masp, IF(giagiam>0, giagiam, giaban) gia FROM sanpham WHERE masp IN ($in)";
+    foreach ($pdo->query($sql) as $p) $price[(int)$p['masp']] = (float)$p['gia'];
+  }
+  foreach ($rows as &$r) {
+    $items = json_decode($r['chitiet'] ?? '[]', true) ?: [];
+    $qty = 0; $tien = 0;
+    foreach ($items as $it) {
+      $sl = (int)($it['sl'] ?? 0);
+      $masp = (int)($it['masp'] ?? 0);
+      $gia = $price[$masp] ?? 0;
+      $qty += $sl;
+      $tien += $sl * $gia;
+    }
+    $r['line_count'] = count($items);
+    $r['qty_sum']    = $qty;
+    $r['tien_hang']  = $tien;
+    $r['phai_thu']   = max(0, $tien - (float)($r['giagiam'] ?? 0));
+  }
+}
+function sum_phai_thu(PDO $pdo, string $whereSql, array $params): array {
+  $stmt = $pdo->prepare("SELECT chitiet, giagiam FROM donhang WHERE $whereSql");
+  $stmt->execute($params);
+  $orders = $stmt->fetchAll();
+  enrich_with_money($orders, $pdo);
+  $sum = 0; foreach ($orders as $o) $sum += $o['phai_thu'];
+  return ['so_don' => count($orders), 'doanh_thu' => $sum];
+}
 
 /* ====== Stats ====== */
-$statToday = $pdo->query("SELECT COUNT(*) so_don, COALESCE(SUM(phai_thu),0) doanh_thu FROM v_order_list WHERE DATE(ngaytao)=CURDATE()")->fetch();
-$statMonth = $pdo->query("SELECT COUNT(*) so_don, COALESCE(SUM(phai_thu),0) doanh_thu FROM v_order_list WHERE YEAR(ngaytao)=YEAR(CURDATE()) AND MONTH(ngaytao)=MONTH(CURDATE())")->fetch();
-$statBySt  = $pdo->prepare("SELECT trangthai, COUNT(*) cnt FROM v_order_list WHERE DATE(ngaytao) BETWEEN :d1 AND :d2 GROUP BY trangthai");
+// $statToday = $pdo->query("SELECT COUNT(*) so_don, COALESCE(SUM(phai_thu),0) doanh_thu FROM v_order_list WHERE DATE(ngaytao)=CURDATE()")->fetch();
+// $statMonth = $pdo->query("SELECT COUNT(*) so_don, COALESCE(SUM(phai_thu),0) doanh_thu FROM v_order_list WHERE YEAR(ngaytao)=YEAR(CURDATE()) AND MONTH(ngaytao)=MONTH(CURDATE())")->fetch();
+// $statBySt  = $pdo->prepare("SELECT trangthai, COUNT(*) cnt FROM v_order_list WHERE DATE(ngaytao) BETWEEN :d1 AND :d2 GROUP BY trangthai");
+// $statBySt->execute([':d1'=>$d1, ':d2'=>$d2]);
+// $bySt = $statBySt->fetchAll();
+$statToday = sum_phai_thu($pdo, "DATE(ngaytao)=CURDATE()", []);
+$statMonth = sum_phai_thu($pdo, "YEAR(ngaytao)=YEAR(CURDATE()) AND MONTH(ngaytao)=MONTH(CURDATE())", []);
+
+$statBySt  = $pdo->prepare("
+  SELECT trangthai, COUNT(*) cnt
+  FROM donhang
+  WHERE DATE(ngaytao) BETWEEN :d1 AND :d2
+  GROUP BY trangthai
+");
 $statBySt->execute([':d1'=>$d1, ':d2'=>$d2]);
 $bySt = $statBySt->fetchAll();
 
 /* ====== Count for pagination ====== */
 $count = $pdo->prepare("
-  SELECT COUNT(*) FROM v_order_list
-  WHERE (:q='' OR ten_kh LIKE CONCAT('%',:q2,'%') OR sdt_kh LIKE CONCAT('%',:q2,'%') OR sodh = :q_exact)
-    AND (:st='' OR trangthai=:st)
-    AND DATE(ngaytao) BETWEEN :d1 AND :d2
+  SELECT COUNT(*)
+  FROM donhang d
+  LEFT JOIN khachhang k ON d.makh = k.makh
+  WHERE (:q='' OR k.hoten LIKE CONCAT('%',:q2,'%') OR k.sdt LIKE CONCAT('%',:q2,'%') OR d.sodh = :q_exact)
+    AND (:st='' OR d.trangthai = :st)
+    AND DATE(d.ngaytao) BETWEEN :d1 AND :d2
 ");
 $qExact = ctype_digit($q) ? (int)$q : 0;
 $count->execute([
@@ -44,11 +94,17 @@ $offset = ($page-1)*$per;
 
 /* ====== Page data ====== */
 $list = $pdo->prepare("
-  SELECT * FROM v_order_list
-  WHERE (:q='' OR ten_kh LIKE CONCAT('%',:q2,'%') OR sdt_kh LIKE CONCAT('%',:q2,'%') OR sodh = :q_exact)
-    AND (:st='' OR trangthai=:st)
-    AND DATE(ngaytao) BETWEEN :d1 AND :d2
-  ORDER BY ngaytao DESC
+  SELECT 
+    d.sodh, d.ngaytao, d.trangthai, d.giagiam, d.chitiet,
+    k.hoten AS ten_kh, k.sdt AS sdt_kh,
+    nv.hoten AS ten_nv
+  FROM donhang d
+  LEFT JOIN khachhang k ON d.makh = k.makh
+  LEFT JOIN nhanvien  nv ON d.manv = nv.manv
+  WHERE (:q='' OR k.hoten LIKE CONCAT('%',:q2,'%') OR k.sdt LIKE CONCAT('%',:q2,'%') OR d.sodh = :q_exact)
+    AND (:st='' OR d.trangthai = :st)
+    AND DATE(d.ngaytao) BETWEEN :d1 AND :d2
+  ORDER BY d.ngaytao DESC
   LIMIT :lim OFFSET :off
 ");
 $list->bindValue(':q',$q);
@@ -61,31 +117,28 @@ $list->bindValue(':lim',$per,PDO::PARAM_INT);
 $list->bindValue(':off',$offset,PDO::PARAM_INT);
 $list->execute();
 $rows = $list->fetchAll();
+enrich_with_money($rows, $pdo);
 
 function build_url($arr){
   return htmlspecialchars($_SERVER['PHP_SELF']).'?'.http_build_query($arr);
 }
 ?>
-<!doctype html>
-<html lang="vi">
-<head>
-  <meta charset="utf-8">
-  <title>Danh sách Đơn hàng</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .glass{background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(10px)}
-    .fade-in{animation:fade .5s ease both}
-    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-    .card{transition:transform .15s ease, box-shadow .15s ease}
-    .card:hover{transform:translateY(-3px); box-shadow:0 16px 30px rgba(2,6,23,.10)}
-    .pill{box-shadow: inset 0 0 0 1px rgba(2,6,23,.08)}
-    .stat{box-shadow:0 12px 30px rgba(59,130,246,.08)}
-  </style>
-</head>
-<body class="bg-slate-50 text-slate-800">
-<div class="flex h-screen">
-  <?php $active='orders'; include __DIR__.'/partials/header.php'; ?>
+<?php
+$page_title = 'Danh sách Đơn hàng';
+$active = 'orders';
+require __DIR__ . '/partials/header.php';
+?>
+<!-- CSS riêng của trang orders (giữ nguyên nội dung cũ) -->
+<style>
+.glass{background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(10px)}
+.fade-in{animation:fade .5s ease both}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.card{transition:transform .15s ease, box-shadow .15s ease}
+.card:hover{transform:translateY(-3px); box-shadow:0 16px 30px rgba(2,6,23,.10)}
+.pill{box-shadow: inset 0 0 0 1px rgba(2,6,23,.08)}
+.stat{box-shadow:0 12px 30px rgba(59,130,246,.08)}
+</style>
+
 
   <main class="flex-1 overflow-y-auto relative z-10">
     <!-- Top bar -->
