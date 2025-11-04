@@ -19,6 +19,41 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 date_default_timezone_set('Asia/Ho_Chi_Minh');
+// ===== Helpers: tính tiền đơn từ JSON chitiet =====
+function enrich_with_money(&$rows, PDO $pdo): void {
+  $ids = [];
+  foreach ($rows as $r) {
+    $items = json_decode($r['chitiet'] ?? '[]', true) ?: [];
+    foreach ($items as $it) if (isset($it['masp'])) $ids[(int)$it['masp']] = true;
+  }
+  $price = [];
+  if ($ids) {
+    $in = implode(',', array_map('intval', array_keys($ids)));
+    $sql = "SELECT masp, IF(giagiam>0, giagiam, giaban) gia FROM sanpham WHERE masp IN ($in)";
+    foreach ($pdo->query($sql) as $p) $price[(int)$p['masp']] = (float)$p['gia'];
+  }
+  foreach ($rows as &$r) {
+    $items = json_decode($r['chitiet'] ?? '[]', true) ?: [];
+    $tien = 0;
+    foreach ($items as $it) {
+      $sl   = (int)($it['sl'] ?? 0);
+      $masp = (int)($it['masp'] ?? 0);
+      $gia  = $price[$masp] ?? 0;
+      $tien += $sl * $gia;
+    }
+    $r['phai_thu'] = max(0, $tien - (float)($r['giagiam'] ?? 0));
+  }
+}
+
+function sum_phai_thu(PDO $pdo, string $whereSql, array $params = []): float {
+  $stmt = $pdo->prepare("SELECT chitiet, giagiam FROM donhang WHERE $whereSql");
+  $stmt->execute($params);
+  $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+  enrich_with_money($rows, $pdo);
+  $sum = 0; foreach ($rows as $r) $sum += $r['phai_thu'];
+  return $sum;
+}
+
 
 // ===== KPI =====
 $kpi = [
@@ -29,68 +64,86 @@ $kpi = [
 ];
 
 // Doanh thu hôm nay (đơn đã thanh toán)
-$sql = "SELECT COALESCE(SUM(c.sl*c.gia)-SUM(d.giagiam),0) AS rev
-        FROM donhang d
-        JOIN chitietdh c USING(sodh)
-        WHERE DATE(d.ngaytao)=CURDATE()
-          AND d.trangthai COLLATE utf8mb4_unicode_ci = 'da_thanh_toan'";
-$kpi['revenue_today'] = (float)$pdo->query($sql)->fetchColumn();
+$kpi['revenue_today'] = sum_phai_thu(
+  $pdo,
+  "DATE(ngaytao)=CURDATE() AND trangthai IN ('da_thanh_toan','da_giao')"
+);
+
 
 // Đơn hàng mới hôm nay
 $kpi['orders_today'] = (int)$pdo->query(
-  "SELECT COUNT(*) FROM donhang WHERE DATE(ngaytao)=CURDATE()"
+  "SELECT COUNT(*) FROM donhang WHERE DATE(ngaytao)=CURDATE() AND trangthai='moi'"
 )->fetchColumn();
 
+
 // Sắp hết hàng (tổng tồn theo lô <=10)
-$sql = "SELECT COUNT(*) FROM (
-          SELECT masp, COALESCE(SUM(sl),0) AS ton
-          FROM lohang GROUP BY masp HAVING ton <= 10
-        ) x";
-$kpi['low_stock'] = (int)$pdo->query($sql)->fetchColumn();
+$kpi['low_stock'] = (int)$pdo->query(
+  "SELECT COUNT(*) FROM tonkho WHERE soluong <= 10"
+)->fetchColumn();
+
 
 // Tổng số sản phẩm
-$kpi['total_products'] = (int)$pdo->query("SELECT COUNT(*) FROM sanpham")->fetchColumn();
+$kpi['total_products'] = (int)$pdo->query(
+  "SELECT COUNT(*) FROM sanpham WHERE trangthai=1"
+)->fetchColumn();
+
 
 // ===== Doanh thu 7 ngày =====
-$sql = "SELECT DATE(d.ngaytao) AS ngay,
-               ROUND(SUM(c.sl*c.gia)-SUM(d.giagiam),0) AS dt
-        FROM donhang d
-        JOIN chitietdh c USING(sodh)
-        WHERE d.trangthai COLLATE utf8mb4_unicode_ci = 'da_thanh_toan'
-          AND d.ngaytao >= CURDATE() - INTERVAL 6 DAY
-        GROUP BY DATE(d.ngaytao)
-        ORDER BY ngay";
-$rows = $pdo->query($sql)->fetchAll();
+$orders7 = $pdo->query(
+  "SELECT DATE(ngaytao) AS d, chitiet, giagiam
+   FROM donhang
+   WHERE trangthai IN ('da_thanh_toan','da_giao')
+     AND ngaytao >= CURDATE() - INTERVAL 6 DAY"
+)->fetchAll(PDO::FETCH_ASSOC);
+
+enrich_with_money($orders7, $pdo);
 
 $rev7 = [];
-for ($i=6;$i>=0;$i--) { $d=date('Y-m-d',strtotime("-$i day")); $rev7[$d]=0; }
-foreach($rows as $r){ $rev7[$r['ngay']] = (int)$r['dt']; }
+for ($i=6; $i>=0; $i--) { $rev7[date('Y-m-d', strtotime("-$i day"))] = 0; }
+foreach ($orders7 as $o) { $rev7[$o['d']] += $o['phai_thu']; }
 $labels7 = array_keys($rev7);
 $data7   = array_values($rev7);
 
+
 // ===== Top bán chạy 30 ngày =====
-$sql = "SELECT sp.tensp, SUM(c.sl) AS qty
-        FROM chitietdh c
-        JOIN donhang d ON d.sodh=c.sodh
-        JOIN sanpham sp ON sp.masp=c.masp
-        WHERE d.ngaytao >= CURDATE() - INTERVAL 30 DAY
-        GROUP BY sp.masp, sp.tensp
-        ORDER BY qty DESC
-        LIMIT 10";
-$topSell = $pdo->query($sql)->fetchAll();
+$rows30 = $pdo->query(
+  "SELECT chitiet FROM donhang
+   WHERE ngaytao >= CURDATE() - INTERVAL 30 DAY"
+)->fetchAll(PDO::FETCH_ASSOC);
+
+$cnt = [];
+foreach ($rows30 as $r) {
+  foreach (json_decode($r['chitiet'] ?? '[]', true) ?: [] as $it) {
+    $masp = (int)($it['masp'] ?? 0);
+    $sl   = (int)($it['sl'] ?? 0);
+    if ($masp>0 && $sl>0) $cnt[$masp] = ($cnt[$masp] ?? 0) + $sl;
+  }
+}
+$topSell = [];
+if ($cnt) {
+  $in = implode(',', array_map('intval', array_keys($cnt)));
+  $nameMap = $pdo->query("SELECT masp, tensp FROM sanpham WHERE masp IN ($in)")
+                 ->fetchAll(PDO::FETCH_KEY_PAIR);
+  foreach ($cnt as $masp => $qty) $topSell[] = ['tensp' => $nameMap[$masp] ?? "#$masp", 'qty' => $qty];
+  usort($topSell, fn($a,$b)=>$b['qty']<=>$a['qty']);
+  $topSell = array_slice($topSell, 0, 10);
+}
+
 
 // ===== Hết hạn / Sắp hết hạn (<=60 ngày) =====
 // Tính trạng thái ở PHP để né so sánh literal trong SQL
-$sql = "SELECT sp.tensp, lh.solo, lh.hsd, lh.sl
-        FROM lohang lh
-        JOIN sanpham sp ON sp.masp=lh.masp
-        WHERE lh.sl>0 AND lh.hsd <= (CURDATE() + INTERVAL 60 DAY)
-        ORDER BY lh.hsd ASC
+$sql = "SELECT sp.tensp, tk.solo, tk.hsd, tk.soluong
+        FROM tonkho tk
+        JOIN sanpham sp ON sp.masp=tk.masp
+        WHERE tk.soluong>0 AND tk.hsd <= (CURDATE() + INTERVAL 60 DAY)
+        ORDER BY tk.hsd ASC
         LIMIT 10";
 $expireLots = $pdo->query($sql)->fetchAll();
 foreach ($expireLots as &$e) {
   $e['status'] = (strtotime($e['hsd']) < strtotime(date('Y-m-d'))) ? 'expired' : 'soon';
-} unset($e);
+}
+unset($e);
+
 
 // helper
 function vnd($n){ return number_format($n,0,',','.').'đ'; }
