@@ -52,7 +52,7 @@ $giaban = number_format((float)$product_data['giaban'], 0, ',', '.') . '₫';
 $giagiam = number_format((float)$product_data['giagiam'], 0, ',', '.') . '₫';
 
 // Xử lý đường dẫn ảnh chính: Thêm BASE_URL
-$hinhsp_main = $BASE_URL_FOR_IMAGES . htmlspecialchars($product_data['hinhsp'] ?? '/uploads/sp/placeholder.jpg');
+$hinhsp_main =  htmlspecialchars($product_data['hinhsp'] ?? '/uploads/sp/placeholder.jpg');
 $donvitinh=htmlspecialchars($product_data['donvitinh']??'Đang cập nhật');
 $thuonghieu = htmlspecialchars($product_data['thuonghieu'] ?? 'Đang cập nhật');
 $nhasanxuat = htmlspecialchars($product_data['nhasanxuat'] ?? 'Đang cập nhật');
@@ -134,10 +134,9 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan'] ?? 'Đang cập n
                     // Mặc định nếu không có ảnh
                     echo '<img class="thumbnail active" src="' . $hinhsp_main . '" alt="Ảnh chính" data-full-src="' . $hinhsp_main . '">';
                     // Giả lập ảnh chi tiết
-                    echo '<img class="thumbnail" src="' . $BASE_URL_FOR_IMAGES . '/assets/img/placeholder_70.jpg" alt="Ảnh thông tin" data-full-src="' . $BASE_URL_FOR_IMAGES . '/assets/img/placeholder_700.jpg">'; 
                 } else {
                     foreach ($images as $index => $img) {
-                        $img_url = $BASE_URL_FOR_IMAGES . htmlspecialchars($img['url']);
+                        $img_url =   htmlspecialchars($img['url']);
                         $isActive = ($img_url == $hinhsp_main) ? 'active' : '';
                         echo '<img class="thumbnail ' . $isActive . '" src="' . $img_url . '" alt="' . htmlspecialchars($img['caption']) . '" data-full-src="' . $img_url . '">';
                     }
