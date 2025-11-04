@@ -1,6 +1,6 @@
 <?php
 // ================== 1. THIẾT LẬP KẾT NỐI DATABASE ==================
-require_once __DIR__ . '/db.php'; // Include file db.php
+require_once dirname(__DIR__) . '/db.php';
 
 $pdo = pdo(); // Sử dụng hàm pdo() từ db.php
 
@@ -11,17 +11,17 @@ $masp_can_tim = isset($_GET['masp']) ? (int)$_GET['masp'] : 1;
 $BASE_URL_FOR_IMAGES = "/pharmacy-management"; // Đường dẫn gốc chứa ảnh, khớp với products.php
 
 // ================== 2. TRUY VẤN DỮ LIỆU SẢN PHẨM ==================
-$sql = "
-SELECT 
-    sp.tensp, sp.giaban, sp.giagiam, sp.hinhsp, sp.congdung, sp.cachdung, 
-    sp.requires_rx, sp.trangthai, sp.xuatxu, sp.nhasanxuat, sp.thanhphan, 
-    sp.dangbaoche, sp.quycach, sp.so_dksp, sp.chidinh,
-    dm.tendm AS danhmuc, dv.tendv AS donvitinh, th.tenth AS thuonghieu
-FROM sanpham sp
-LEFT JOIN danhmuc dm ON dm.madm = sp.madm
-LEFT JOIN donvitinh dv ON dv.madv = sp.madv
-LEFT JOIN thuonghieu th ON th.math = sp.math
-WHERE sp.masp = :masp";
+$sql = "SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam, sp.hinhsp,
+               sp.congdung, sp.xuatxu, sp.cachdung, sp.requires_rx,
+               sp.quycach, sp.dangbaoche,
+               dm.tendm, dm.madm,
+               dv.tendv AS donvi_tinh
+        FROM sanpham sp
+        LEFT JOIN danhmuc dm ON sp.madm = dm.madm
+        LEFT JOIN donvitinh dv ON sp.madv = dv.madv
+        WHERE sp.masp = :masp
+        LIMIT 1";
+
 
 $st = $pdo->prepare($sql);
 $st->bindValue(':masp', $masp_can_tim, PDO::PARAM_INT);
@@ -53,7 +53,7 @@ $giagiam = number_format((float)$product_data['giagiam'], 0, ',', '.') . '₫';
 
 // Xử lý đường dẫn ảnh chính: Thêm BASE_URL
 $hinhsp_main = $BASE_URL_FOR_IMAGES . htmlspecialchars($product_data['hinhsp'] ?? '/uploads/sp/placeholder.jpg');
-
+$donvitinh=htmlspecialchars($product_data['donvitinh']??'Đang cập nhật');
 $thuonghieu = htmlspecialchars($product_data['thuonghieu'] ?? 'Đang cập nhật');
 $nhasanxuat = htmlspecialchars($product_data['nhasanxuat'] ?? 'Đang cập nhật');
 $xuatxu = htmlspecialchars($product_data['xuatxu'] ?? 'Đang cập nhật');
@@ -66,6 +66,7 @@ $congdung = nl2br(htmlspecialchars($product_data['congdung'] ?? 'Đang cập nh�
 $cachdung = nl2br(htmlspecialchars($product_data['cachdung'] ?? 'Đang cập nhật'));
 $chidinh = nl2br(htmlspecialchars($product_data['chidinh'] ?? 'Đang cập nhật'));
 $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan'] ?? 'Đang cập nhật'));
+
 ?>
 
 <!DOCTYPE html>
@@ -145,7 +146,7 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan'] ?? 'Đang cập n
             </div>
             <p style="font-size: 12px; color: #666; margin-top: 10px;">Mẫu mã sản phẩm có thể thay đổi theo lô hàng</p>
         </div>
-        
+
         <div class="product-details">
             <div class="product-header">
                 <span class="badge-official">CHÍNH HÃNG</span>
@@ -158,6 +159,7 @@ $thanhphan = nl2br(htmlspecialchars($product_data['thanhphan'] ?? 'Đang cập n
 
             <table class="info-table">
                 <tr><th>Tên chính hãng</th><td><?php echo $thuonghieu; ?></td></tr>
+                <tr><th>Đơn vị tính</th><td><?php echo $donvitinh; ?></td></tr>
                 <tr><th>Danh mục</th><td><?php echo htmlspecialchars($product_data['danhmuc'] ?? 'Khác'); ?></td></tr>
                 <tr><th>Số đăng ký</th><td><?php echo $so_dksp; ?></td></tr>
                 <tr><th>Dạng bào chế</th><td><?php echo $dangbaoche; ?></td></tr>
