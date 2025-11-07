@@ -581,7 +581,7 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
                                 <li>Hẹp bao quy đầu</li>
                                 <li>Yếu sinh lý</li>
                             </ul>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
 
                         <div class="card">
@@ -593,7 +593,7 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
                                 <li>Chậm kinh</li>
                                 <li>Mất kinh</li>
                             </ul>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
 
                         <div class="card">
@@ -605,7 +605,7 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
                                 <li>Parkinson thứ phát</li>
                                 <li>Đục thủy tinh thể ở người già</li>
                             </ul>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
 
                         <div class="card">
@@ -617,7 +617,7 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
                                 <li>Uốn ván</li>
                                 <li>Tắc ruột sơ sinh</li>
                             </ul>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
                     </div>
 
@@ -627,28 +627,28 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
                             <img src="static/img/sot-xuat-huyet.webp" alt="Sốt xuất huyết">
                             <h3>Sốt xuất huyết Dengue</h3>
                             <p>Sốt xuất huyết Dengue là bệnh do muỗi truyền xảy ra ở các khu vực nhiệt đới và cận nhiệt đới...</p>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
 
                         <div class="card">
                             <img src="static/img/ebola.webp" alt="Ebola">
                             <h3>Ebola</h3>
                             <p>Ebola là một căn bệnh truyền nhiễm hiếm gặp nhưng có thể gây nguy cơ tử vong cao ở người...</p>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
 
                         <div class="card">
                             <img src="static//img/cum.png" alt="Cúm">
                             <h3>Cúm</h3>
                             <p>Bệnh cúm là bệnh truyền nhiễm, gây ra do nhiễm virus cúm. Virus có thể gây bệnh từ nhẹ tới nặng...</p>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
 
                         <div class="card">
                             <img src="static/img/tcm.jpeg" alt="Tay chân miệng">
                             <h3>Bệnh tay chân miệng</h3>
                             <p>Bệnh Tay chân miệng là bệnh do virus gây ra, có khả năng lây lan rất nhanh chóng và do đó, rất dễ bùng phát thành dịch...</p>
-                            <a href="#">Tìm hiểu thêm →</a>
+                            <a href="/Pharmacy-management/base.php?page=search_disease">Tìm hiểu thêm →</a>
                         </div>
                     </div>
                 </div>
