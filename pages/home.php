@@ -109,7 +109,7 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
                     <div class="banner-slides">
                         <!-- Slide 1 -->
                         <div class="banner-slide active">
-                                <img src="static/img/D_H1_Desktop_1200x367_0a2663616c.webp"
+                                <img src="static/img/banner/D_H1_Desktop_1200x367_0a2663616c.webp"
                                      alt="Máy đo đường huyết liên tục" class="desktop-img">
                         </div>
 
@@ -121,13 +121,13 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
 
                         <!-- Slide 3 -->
                         <div class="banner-slide">
-                                <img src="static/img/H1_desktop_805x246_fea391ab17.webp"
+                                <img src="static/img/banner/H1_desktop_805x246_fea391ab17.webp"
                                      alt="Hội thảo chuyên nghiệp cùng chuyên gia ung thư" class="desktop-img">
                         </div>
 
                         <!-- Thêm các slide khác -->
                         <div class="banner-slide">
-                                <img src="static/img/H1_desktop_805x246_8c1d616da4.webp"
+                                <img src="/static/img/banner/H1_desktop_805x246_8c1d616da4.webp"
                                      alt="Vitabiotics" class="desktop-img">
 
                         </div>
