@@ -1,498 +1,499 @@
 <?php
-$page_title = 'Quản Lý Dữ Liệu - Quản Trị Nhà Thuốc';
-$active = 'management'; 
-require_once dirname(__DIR__) . '/db.php';
+// admin/management.php - Quản lý Danh mục (Tái cấu trúc theo mẫu products.php)
 
+// Tự định nghĩa kết nối PDO, giống như products.php
+$pdo = new PDO(
+  'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
+  [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
+);
 
-$pdo = pdo(); // Lấy kết nối PDO
-?>
+$q  = trim($_GET['q'] ?? '');
+$cap = (int)($_GET['cap'] ?? 0); // Lọc theo cấp danh mục
+$perPage      = max(1,(int)($_GET['per'] ?? 9)); // Số lượng danh mục trên mỗi trang, giống products
+$page         = max(1,(int)($_GET['page'] ?? 1));
 
-<!-- =============================================== -->
-<!-- BẮT ĐẦU NỘI DUNG RIÊNG CỦA TRANG MANAGEMENT     -->
-<!-- =============================================== -->
-<main class="flex-1 p-8 overflow-y-auto">
-    <div class="max-w-7xl mx-auto">
-        <!-- Header của phần nội dung -->
-        <header class="flex justify-between items-center mb-8">
-            <div>
-                <h2 class="text-3xl font-bold text-gray-800">Quản Lý Dữ Liệu</h2>
-                <p class="text-gray-500 mt-1">Quản lý danh mục, thương hiệu và đơn vị tính cho Nhà thuốc An Tâm.</p>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="relative">
-                    <input type="search" placeholder="Tìm kiếm..." class="pl-10 pr-4 py-2 w-72 border border-gray-300 rounded-full bg-white shadow-sm focus:ring-2 focus:outline-none transition" style="--tw-ring-color: var(--primary-color)">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
-                </div>
-                <div class="flex items-center gap-3">
-                    <img src="https://placehold.co/40x40/0284c7/FFFFFF?text=A" alt="Avatar" class="rounded-full">
-                    <div>
-                        <p class="font-semibold">Nguyễn Văn A</p>
-                        <p class="text-sm text-gray-500">Quản trị viên</p>
-                    </div>
-                </div>
-            </div>
-        </header>
+// Hàm gọi API, giống products.php
+function callAPI($endpoint, $params = []) {
+    $baseURL = 'http://localhost/pharmacy-management/api/api_management.php';
+    $url = $baseURL . $endpoint;
+    
+    if (!empty($params)) {
+        $url .= '?' . http_build_query($params);
+    }
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($httpCode === 200 && $response) {
+        return json_decode($response, true);
+    }
+    
+    return null;
+}
 
-        <!-- Phần nội dung chính với Tabs -->
-        <div class="bg-white/80 backdrop-blur-lg p-6 rounded-2xl shadow-md border border-gray-200">
-            <h3 class="text-xl font-semibold mb-4" style="color: var(--primary-dark);">Danh sách dữ liệu</h3>
-            
-            <!-- Tabs cho 3 phần -->
-            <ul class="nav nav-tabs mb-4" id="myTab" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="danhmuc-tab" data-bs-toggle="tab" data-bs-target="#danhmuc" type="button">Danh Mục</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="thuonghieu-tab" data-bs-toggle="tab" data-bs-target="#thuonghieu" type="button">Thương Hiệu</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="donvitinh-tab" data-bs-toggle="tab" data-bs-target="#donvitinh" type="button">Đơn Vị Tính</button>
-                </li>
-            </ul>
-            
-            <div class="tab-content" id="myTabContent">
-                <!-- Tab Danh Mục -->
-                <div class="tab-pane fade show active" id="danhmuc" role="tabpanel">
-                    <button class="btn btn-primary mb-3 dashboard-card" data-bs-toggle="modal" data-bs-target="#addDanhMucModal">Thêm Danh Mục</button>
-                    <table class="table table-bordered table-hover shadow-sm rounded-lg overflow-hidden" id="danhmucTable">
-                        <thead class="bg-gray-100"><tr><th>Mã DM</th><th>Tên DM</th><th>Cấp</th><th>Parent ID</th><th>Img URL</th><th>Hành Động</th></tr></thead>
-                        <tbody>
-                            <?php
-                            $sql_danhmuc = "SELECT madm, tendm, cap, parent_id, img_url FROM danhmuc ORDER BY madm ASC";
-                            $stmt_danhmuc = $pdo->query($sql_danhmuc);
-                            if ($stmt_danhmuc->rowCount() > 0) {
-                                while ($row = $stmt_danhmuc->fetch()) {
-                                    echo "<tr>";
-                                    echo "<td>" . $row['madm'] . "</td>";
-                                    echo "<td>" . htmlspecialchars($row['tendm']) . "</td>";
-                                    echo "<td>" . $row['cap'] . "</td>";
-                                    echo "<td>" . ($row['parent_id'] ? $row['parent_id'] : '') . "</td>";
-                                    echo "<td>" . htmlspecialchars($row['img_url']) . "</td>";
-                                    echo "<td>";
-                                    echo "<button class='btn btn-sm btn-warning' data-bs-toggle='modal' data-bs-target='#editDanhMucModal' data-id='" . $row['madm'] . "' data-tendm='" . htmlspecialchars($row['tendm']) . "' data-cap='" . $row['cap'] . "' data-parent_id='" . ($row['parent_id'] ? $row['parent_id'] : '') . "' data-img_url='" . htmlspecialchars($row['img_url']) . "'>Sửa</button> ";
-                                    echo "<button class='btn btn-sm btn-danger' onclick='deleteDanhMuc(" . $row['madm'] . ")'>Xóa</button>";
-                                    echo "</td>";
-                                    echo "</tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='6' class='text-center'>Không có dữ liệu danh mục</td></tr>";
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Tab Thương Hiệu -->
-                <div class="tab-pane fade" id="thuonghieu" role="tabpanel">
-                    <button class="btn btn-primary mb-3 dashboard-card" data-bs-toggle="modal" data-bs-target="#addThuongHieuModal">Thêm Thương Hiệu</button>
-                    <table class="table table-bordered table-hover shadow-sm rounded-lg overflow-hidden" id="thuonghieuTable">
-                        <thead class="bg-gray-100"><tr><th>Mã TH</th><th>Tên TH</th><th>Logo URL</th><th>Hành Động</th></tr></thead>
-                        <tbody>
-                            <?php
-                            $sql_thuonghieu = "SELECT math, tenth, logo_url FROM thuonghieu ORDER BY math ASC";
-                            $stmt_thuonghieu = $pdo->query($sql_thuonghieu);
-                            if ($stmt_thuonghieu->rowCount() > 0) {
-                                while ($row = $stmt_thuonghieu->fetch()) {
-                                    echo "<tr>";
-                                    echo "<td>" . $row['math'] . "</td>";
-                                    echo "<td>" . htmlspecialchars($row['tenth']) . "</td>";
-                                    echo "<td>" . htmlspecialchars($row['logo_url']) . "</td>";
-                                    echo "<td>";
-                                    echo "<button class='btn btn-sm btn-warning' data-bs-toggle='modal' data-bs-target='#editThuongHieuModal' data-id='" . $row['math'] . "' data-tenth='" . htmlspecialchars($row['tenth']) . "' data-logo_url='" . htmlspecialchars($row['logo_url']) . "'>Sửa</button> ";
-                                    echo "<button class='btn btn-sm btn-danger' onclick='deleteThuongHieu(" . $row['math'] . ")'>Xóa</button>";
-                                    echo "</td>";
-                                    echo "</tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='4' class='text-center'>Không có dữ liệu thương hiệu</td></tr>";
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Tab Đơn Vị Tính -->
-                <div class="tab-pane fade" id="donvitinh" role="tabpanel">
-                    <button class="btn btn-primary mb-3 dashboard-card" data-bs-toggle="modal" data-bs-target="#addDonViTinhModal">Thêm Đơn Vị Tính</button>
-                    <table class="table table-bordered table-hover shadow-sm rounded-lg overflow-hidden" id="donvitinhTable">
-                        <thead class="bg-gray-100"><tr><th>Mã DV</th><th>Tên DV</th><th>Hành Động</th></tr></thead>
-                        <tbody>
-                            <?php
-                            $sql_donvitinh = "SELECT madv, tendv FROM donvitinh ORDER BY madv ASC";
-                            $stmt_donvitinh = $pdo->query($sql_donvitinh);
-                            if ($stmt_donvitinh->rowCount() > 0) {
-                                while ($row = $stmt_donvitinh->fetch()) {
-                                    echo "<tr>";
-                                    echo "<td>" . $row['madv'] . "</td>";
-                                    echo "<td>" . htmlspecialchars($row['tendv']) . "</td>";
-                                    echo "<td>";
-                                    echo "<button class='btn btn-sm btn-warning' data-bs-toggle='modal' data-bs-target='#editDonViTinhModal' data-id='" . $row['madv'] . "' data-tendv='" . htmlspecialchars($row['tendv']) . "'>Sửa</button> ";
-                                    echo "<button class='btn btn-sm btn-danger' onclick='deleteDonViTinh(" . $row['madv'] . ")'>Xóa</button>";
-                                    echo "</td>";
-                                    echo "</tr>";
-                                }
-                            } else {
-                                echo "<tr><td colspan='3' class='text-center'>Không có dữ liệu đơn vị tính</td></tr>";
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</main>
-<!-- =============================================== -->
-<!-- KẾT THÚC NỘI DUNG RIÊNG CỦA TRANG MANAGEMENT    -->
-<!-- =============================================== -->
+/* ===== STATS (Thống kê) ===== */
+$totalCats = (int)$pdo->query("SELECT COUNT(*) FROM danhmuc")->fetchColumn();
+$cap1Cats  = (int)$pdo->query("SELECT COUNT(*) FROM danhmuc WHERE cap=1")->fetchColumn();
+$cap2Cats  = (int)$pdo->query("SELECT COUNT(*) FROM danhmuc WHERE cap=2")->fetchColumn();
+$cap3Cats  = (int)$pdo->query("SELECT COUNT(*) FROM danhmuc WHERE cap=3")->fetchColumn();
 
-<!-- Modal cho Thêm Danh Mục (giữ nguyên) -->
-<div class="modal fade" id="addDanhMucModal" tabindex="-1" aria-labelledby="addDanhMucModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addDanhMucModalLabel">Thêm Danh Mục</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Form thêm danh mục -->
-                <form id="addDanhMucForm">
-                    <div class="mb-3">
-                        <label for="tendm" class="form-label">Tên Danh Mục</label>
-                        <input type="text" class="form-control" id="tendm" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="cap" class="form-label">Cấp</label>
-                        <input type="number" class="form-control" id="cap" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="parent_id" class="form-label">Parent ID</label>
-                        <input type="number" class="form-control" id="parent_id">
-                    </div>
-                    <div class="mb-3">
-                        <label for="img_url" class="form-label">Img URL</label>
-                        <input type="text" class="form-control" id="img_url">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Thêm</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+/* ===== LẤY DỮ LIỆU TỪ API ===== */
+$apiParams = [
+    'q' => $q,
+    'cap' => $cap,
+    'per' => $perPage,
+    'page' => $page
+];
 
-<!-- Modal cho Sửa Danh Mục (thêm mới) -->
-<div class="modal fade" id="editDanhMucModal" tabindex="-1" aria-labelledby="editDanhMucModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editDanhMucModalLabel">Sửa Danh Mục</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Form sửa danh mục -->
-                <form id="editDanhMucForm">
-                    <input type="hidden" id="edit_madm">
-                    <div class="mb-3">
-                        <label for="edit_tendm" class="form-label">Tên Danh Mục</label>
-                        <input type="text" class="form-control" id="edit_tendm" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_cap" class="form-label">Cấp</label>
-                        <input type="number" class="form-control" id="edit_cap" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_parent_id" class="form-label">Parent ID</label>
-                        <input type="number" class="form-control" id="edit_parent_id">
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_img_url" class="form-label">Img URL</label>
-                        <input type="text" class="form-control" id="edit_img_url">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Lưu</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+$apiResponse = callAPI('', $apiParams);
 
-<!-- Tương tự cho các modal khác của Thương Hiệu và Đơn Vị Tính -->
-<!-- Modal Thêm Thương Hiệu -->
-<div class="modal fade" id="addThuongHieuModal" tabindex="-1" aria-labelledby="addThuongHieuModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addThuongHieuModalLabel">Thêm Thương Hiệu</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="addThuongHieuForm">
-                    <div class="mb-3">
-                        <label for="tenth" class="form-label">Tên Thương Hiệu</label>
-                        <input type="text" class="form-control" id="tenth" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="logo_url" class="form-label">Logo URL</label>
-                        <input type="text" class="form-control" id="logo_url">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Thêm</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Sửa Thương Hiệu -->
-<div class="modal fade" id="editThuongHieuModal" tabindex="-1" aria-labelledby="editThuongHieuModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editThuongHieuModalLabel">Sửa Thương Hiệu</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="editThuongHieuForm">
-                    <input type="hidden" id="edit_math">
-                    <div class="mb-3">
-                        <label for="edit_tenth" class="form-label">Tên Thương Hiệu</label>
-                        <input type="text" class="form-control" id="edit_tenth" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="edit_logo_url" class="form-label">Logo URL</label>
-                        <input type="text" class="form-control" id="edit_logo_url">
-                    </div>
-                    <button type="submit" class="btn btn-primary">Lưu</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Thêm Đơn Vị Tính -->
-<div class="modal fade" id="addDonViTinhModal" tabindex="-1" aria-labelledby="addDonViTinhModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="addDonViTinhModalLabel">Thêm Đơn Vị Tính</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="addDonViTinhForm">
-                    <div class="mb-3">
-                        <label for="tendv" class="form-label">Tên Đơn Vị Tính</label>
-                        <input type="text" class="form-control" id="tendv" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Thêm</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Sửa Đơn Vị Tính -->
-<div class="modal fade" id="editDonViTinhModal" tabindex="-1" aria-labelledby="editDonViTinhModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="editDonViTinhModalLabel">Sửa Đơn Vị Tính</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="editDonViTinhForm">
-                    <input type="hidden" id="edit_madv">
-                    <div class="mb-3">
-                        <label for="edit_tendv" class="form-label">Tên Đơn Vị Tính</label>
-                        <input type="text" class="form-control" id="edit_tendv" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Lưu</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Script để handle modal edit và submit form qua AJAX -->
-<script>
-    // Handle edit Danh Mục
-    var editDanhMucModal = document.getElementById('editDanhMucModal');
-    editDanhMucModal.addEventListener('show.bs.modal', function (event) {
-        var button = event.relatedTarget;
-        var madm = button.getAttribute('data-id');
-        var tendm = button.getAttribute('data-tendm');
-        var cap = button.getAttribute('data-cap');
-        var parent_id = button.getAttribute('data-parent_id');
-        var img_url = button.getAttribute('data-img_url');
-
-        var modalMadm = editDanhMucModal.querySelector('#edit_madm');
-        var modalTendm = editDanhMucModal.querySelector('#edit_tendm');
-        var modalCap = editDanhMucModal.querySelector('#edit_cap');
-        var modalParentId = editDanhMucModal.querySelector('#edit_parent_id');
-        var modalImgUrl = editDanhMucModal.querySelector('#edit_img_url');
-
-        modalMadm.value = madm;
-        modalTendm.value = tendm;
-        modalCap.value = cap;
-        modalParentId.value = parent_id;
-        modalImgUrl.value = img_url;
-    });
-
-    // Tương tự cho Thương Hiệu
-    var editThuongHieuModal = document.getElementById('editThuongHieuModal');
-    editThuongHieuModal.addEventListener('show.bs.modal', function (event) {
-        var button = event.relatedTarget;
-        var math = button.getAttribute('data-id');
-        var tenth = button.getAttribute('data-tenth');
-        var logo_url = button.getAttribute('data-logo_url');
-
-        var modalMath = editThuongHieuModal.querySelector('#edit_math');
-        var modalTenth = editThuongHieuModal.querySelector('#edit_tenth');
-        var modalLogoUrl = editThuongHieuModal.querySelector('#edit_logo_url');
-
-        modalMath.value = math;
-        modalTenth.value = tenth;
-        modalLogoUrl.value = logo_url;
-    });
-
-    // Tương tự cho Đơn Vị Tính
-    var editDonViTinhModal = document.getElementById('editDonViTinhModal');
-    editDonViTinhModal.addEventListener('show.bs.modal', function (event) {
-        var button = event.relatedTarget;
-        var madv = button.getAttribute('data-id');
-        var tendv = button.getAttribute('data-tendv');
-
-        var modalMadv = editDonViTinhModal.querySelector('#edit_madv');
-        var modalTendv = editDonViTinhModal.querySelector('#edit_tendv');
-
-        modalMadv.value = madv;
-        modalTendv.value = tendv;
-    });
-
-    // Submit form thêm/sửa/xóa qua AJAX
-    document.getElementById('addDanhMucForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitForm('addDanhMucForm', 'add_danhmuc', '#addDanhMucModal');
-    });
-
-    document.getElementById('editDanhMucForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitForm('editDanhMucForm', 'edit_danhmuc', '#editDanhMucModal');
-    });
-
-    document.getElementById('addThuongHieuForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitForm('addThuongHieuForm', 'add_thuonghieu', '#addThuongHieuModal');
-    });
-
-    document.getElementById('editThuongHieuForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitForm('editThuongHieuForm', 'edit_thuonghieu', '#editThuongHieuModal');
-    });
-
-    document.getElementById('addDonViTinhForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitForm('addDonViTinhForm', 'add_donvitinh', '#addDonViTinhModal');
-    });
-
-    document.getElementById('editDonViTinhForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        submitForm('editDonViTinhForm', 'edit_donvitinh', '#editDonViTinhModal');
-    });
-
-    function submitForm(formId, action, modalId) {
-        var form = document.getElementById(formId);
-        var formData = new FormData(form);
-        formData.append('action', action);
-
-        fetch('api_management.php', { // Gửi đến file api_management.php
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                location.reload(); // Reload để cập nhật table
-            } else {
-                alert(data.message);
+if ($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] && isset($apiResponse['data'])) {
+    $totalFiltered = $apiResponse['total'];
+    $pages = $apiResponse['pages'];
+    $page = $apiResponse['current_page'];
+    $rows = $apiResponse['data'];
+    
+    // Xử lý dữ liệu để tương thích
+    foreach ($rows as &$r) {
+        // Giả định API trả về madm, tendm, cap, parent_id, img_url, parent_name
+        // Xử lý hình ảnh: Thêm prefix nếu cần
+        if (!empty($r['img_url'])) {
+            if (!str_starts_with($r['img_url'], '/pharmacy-management/')) {
+                $r['img_url'] = '/pharmacy-management/' . $r['img_url'];
             }
-            var modal = bootstrap.Modal.getInstance(document.querySelector(modalId));
-            modal.hide();
-        })
-        .catch(error => console.error('Error:', error));
-    }
-
-    function deleteDanhMuc(id) {
-        if (confirm('Bạn có chắc muốn xóa danh mục này?')) {
-            var formData = new FormData();
-            formData.append('action', 'delete_danhmuc');
-            formData.append('madm', id);
-
-            fetch('api_management.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                    location.reload();
-                } else {
-                    alert(data.message);
-                }
-            })
-            .catch(error => console.error('Error:', error));
+        } else {
+            $r['img_url'] = '/pharmacy-management/uploads/sp/placeholder.jpg';
         }
     }
+    unset($r);
+} else {
+    // Fallback về truy vấn trực tiếp
+    $whereClauses = [];
+    $execParams = [];
 
-    function deleteThuongHieu(id) {
-        if (confirm('Bạn có chắc muốn xóa thương hiệu này?')) {
-            var formData = new FormData();
-            formData.append('action', 'delete_thuonghieu');
-            formData.append('math', id);
-
-            fetch('api_management.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                    location.reload();
-                } else {
-                    alert(data.message);
-                }
-            })
-            .catch(error => console.error('Error:', error));
-        }
+    if ($q !== '') {
+        $whereClauses[] = "dm.tendm LIKE CONCAT('%',:q,'%')";
+        $execParams[':q'] = $q;
     }
 
-    function deleteDonViTinh(id) {
-        if (confirm('Bạn có chắc muốn xóa đơn vị tính này?')) {
-            var formData = new FormData();
-            formData.append('action', 'delete_donvitinh');
-            formData.append('madv', id);
+    if ($cap > 0) {
+        $whereClauses[] = "dm.cap = :cap";
+        $execParams[':cap'] = $cap;
+    }
 
-            fetch('api_management.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert(data.message);
-                    location.reload();
-                } else {
-                    alert(data.message);
-                }
-            })
-            .catch(error => console.error('Error:', error));
+    $whereSql = empty($whereClauses) ? '' : 'WHERE ' . implode(' AND ', $whereClauses);
+
+    // Đếm tổng số danh mục đã lọc
+    $countSql = "SELECT COUNT(*) FROM danhmuc dm $whereSql";
+    $cst = $pdo->prepare($countSql);
+    $cst->execute($execParams);
+    $totalFiltered = (int)$cst->fetchColumn();
+
+    $pages = max(1, (int)ceil($totalFiltered / $perPage));
+    if ($page > $pages) $page = $pages;
+    $offset = ($page - 1) * $perPage;
+
+    // Lấy dữ liệu danh mục
+    $sql = "
+    SELECT dm.madm, dm.tendm, dm.cap, dm.parent_id, dm.img_url, p.tendm AS parent_name
+    FROM danhmuc dm
+    LEFT JOIN danhmuc p ON p.madm = dm.parent_id
+    $whereSql
+    ORDER BY dm.cap, dm.tendm
+    LIMIT :lim OFFSET :off";
+
+    $st=$pdo->prepare($sql);
+    $st->bindValue(':lim',$perPage,PDO::PARAM_INT);
+    $st->bindValue(':off',$offset,PDO::PARAM_INT);
+    foreach ($execParams as $key => $val) {
+        $st->bindValue($key, $val, str_starts_with($key, ':cap') ? PDO::PARAM_INT : PDO::PARAM_STR);
+    }
+    $st->execute();
+    $rows=$st->fetchAll();
+    
+    // Xử lý hình ảnh trong fallback
+    foreach ($rows as &$r) {
+        if (!empty($r['img_url'])) {
+            if (!str_starts_with($r['img_url'], '/pharmacy-management/')) {
+                $r['img_url'] = '/pharmacy-management/' . $r['img_url'];
+            }
+        } else {
+            $r['img_url'] = '/pharmacy-management/uploads/sp/placeholder.jpg';
         }
     }
-</script>
+    unset($r);
+}
 
-<?php
-// Đóng các thẻ HTML đã được mở trong header.php
+// Lấy danh sách danh mục cha (cấp 1 và 2) cho modal
+$parentCats = $pdo->query("SELECT madm, tendm, cap FROM danhmuc WHERE cap IN (1, 2) ORDER BY cap, tendm")->fetchAll();
+
+/* helper build url (giống products.php) */
+function build_url($q,$cap,$page,$per){ return htmlspecialchars($_SERVER['PHP_SELF']).'?'.http_build_query(['q'=>$q,'cap'=>$cap,'page'=>$page,'per'=>$per]); }
 ?>
-</div> <!-- Đóng thẻ div.flex.h-screen -->
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Quản lý danh mục,thương hiệu và đơn vị tính</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .glass{background:rgba(255,255,255,.85);backdrop-filter:saturate(180%) blur(10px)}
+    .fade-in{animation:fade .5s ease both}
+    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    .card{transition:transform .15s ease, box-shadow .15s ease}
+    .card:hover{transform:translateY(-3px); box-shadow:0 16px 30px rgba(2,6,23,.10)}
+    .pill{box-shadow: inset 0 0 0 1px rgba(2,6,23,.08)}
+    .stat{box-shadow:0 12px 30px rgba(59,130,246,.08)}
+    .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center}
+    .modal.active{display:flex}
+    .modal-content{background:white;border-radius:1rem;max-width:600px;width:90%;max-height:90vh;overflow-y:auto;padding:2rem}
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div class="flex h-screen">
+  <?php $active='products'; include __DIR__.'/partials/header.php'; ?>
+
+  <main class="flex-1 overflow-y-auto relative z-10">
+    <header class="sticky top-0 z-20 glass border-b border-slate-200">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <h1 class="text-3xl font-extrabold tracking-tight">Quản lý danh mục,thương hiệu và đơn vị tính</h1>
+        <div class="flex gap-2 items-center">
+        <button onclick="openAddModal()" class="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition flex items-center gap-2">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m7-7H5"/></svg>
+          Thêm danh mục
+        </button>
+        <form method="get" class="flex gap-2 items-center">
+          <div class="relative">
+            <input name="q" value="<?=htmlspecialchars($q)?>" placeholder="Tìm kiếm danh mục…"
+                   class="w-80 pl-10 pr-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            <svg class="absolute left-3 top-2.5 text-slate-400" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="7"/><path d="m21 21-6-6"/></svg>
+          </div>
+          <select name="cap" class="px-3 py-2 rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-400">
+            <option value="0">Tất cả cấp</option>
+            <option value="1" <?=$cap==1?'selected':''?>>Cấp 1</option>
+            <option value="2" <?=$cap==2?'selected':''?>>Cấp 2</option>
+            <option value="3" <?=$cap==3?'selected':''?>>Cấp 3</option>
+          </select>
+          <input type="hidden" name="per" value="<?=$perPage?>">
+          <button class="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition">Lọc</button>
+        </form>
+        </div>
+      </div>
+    </header>
+
+    <section class="max-w-7xl mx-auto px-6 pt-6 pb-2">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="glass rounded-2xl p-5 stat fade-in">
+          <div class="text-slate-500">Tổng số danh mục</div>
+          <div class="text-3xl font-extrabold mt-1" data-count="<?=$totalCats?>">0</div>
+        </div>
+        <div class="glass rounded-2xl p-5 stat fade-in">
+          <div class="text-slate-500">Danh mục Cấp 1</div>
+          <div class="text-3xl font-extrabold mt-1 text-green-600" data-count="<?=$cap1Cats?>">0</div>
+        </div>
+        <div class="glass rounded-2xl p-5 stat fade-in">
+          <div class="text-slate-500">Danh mục Cấp 2</div>
+          <div class="text-3xl font-extrabold mt-1 text-amber-600" data-count="<?=$cap2Cats?>">0</div>
+        </div>
+        <div class="glass rounded-2xl p-5 stat fade-in">
+          <div class="text-slate-500">Danh mục Cấp 3</div>
+          <div class="text-3xl font-extrabold mt-1 text-violet-600" data-count="<?=$cap3Cats?>">0</div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <a href="<?=build_url('',0,1,$perPage)?>" class="pill px-3 py-1.5 rounded-full bg-white hover:bg-slate-50">Tất cả</a>
+        <a href="<?=build_url($q, 0, 1, $perPage)?>" class="pill px-3 py-1.5 rounded-full bg-white hover:bg-slate-50">Xoá lọc</a>
+        <span class="px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 pill">Kết quả: <?=$totalFiltered?></span>
+        <span class="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 pill">Trang <?=$page?>/<?=$pages?></span>
+      </div>
+
+      <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <?php foreach($rows as $r):
+          $badgeColor = $r['cap'] == 1 ? 'bg-green-100 text-green-700' : ($r['cap'] == 2 ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700');
+        ?>
+        <div class="glass rounded-2xl p-4 card fade-in border border-slate-200/70">
+          <div class="flex gap-4">
+            <img src="<?=htmlspecialchars($r['img_url'])?>" referrerpolicy="no-referrer"
+                 class="w-24 h-24 object-cover rounded-xl border border-slate-200 bg-white" alt="">
+            <div class="flex-1">
+              <div class="font-semibold leading-snug">
+                <?=htmlspecialchars($r['tendm'])?> <span class="ml-2 px-2 py-0.5 text-xs rounded <?=$badgeColor?>">Cấp <?=$r['cap']?></span>
+              </div>
+              <div class="text-sm text-slate-500 mt-0.5">
+                Cha: <?=htmlspecialchars($r['parent_name']??'N/A')?>
+              </div>
+              <div class="mt-3 flex gap-2">
+                <button onclick="openEditModal(<?=$r['madm']?>)"
+                   class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</button>
+                <button onclick="deleteCategory(<?=$r['madm']?>)"
+                   class="px-3 py-1.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm transition">Xóa</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+
+      <div class="mt-8 flex items-center justify-between">
+        <div class="text-sm text-slate-600">
+          Hiển thị
+          <b><?=min($totalFiltered, $offset+1)?></b>—
+          <b><?=min($totalFiltered, $offset + count($rows))?></b>
+          / <b><?=$totalFiltered?></b> danh mục
+        </div>
+        <nav class="flex items-center gap-2">
+          <?php if($page>1): ?>
+            <a class="px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50"
+               href="<?=build_url($q,$cap,$page-1,$perPage)?>">« Trước</a>
+          <?php endif; ?>
+
+          <?php
+            $win = 2;
+            $start = max(1, $page-$win);
+            $end   = min($pages, $page+$win);
+            if ($start>1) {
+              echo '<a class="px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50" href="'.build_url($q,$cap,1,$perPage).'">1</a>';
+              if ($start>2) echo '<span class="px-2">…</span>';
+            }
+            for($p=$start;$p<=$end;$p++){
+              $cls = $p==$page ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-slate-50';
+              echo '<a class="px-3 py-1.5 rounded-lg border '.$cls.'" href="'.build_url($q,$cap,$p,$perPage).'">'.$p.'</a>';
+            }
+            if ($end<$pages) {
+              if ($end<$pages-1) echo '<span class="px-2">…</span>';
+              echo '<a class="px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50" href="'.build_url($q,$cap,$pages,$perPage).'">'.$pages.'</a>';
+            }
+          ?>
+
+          <?php if($page<$pages): ?>
+            <a class="px-3 py-1.5 rounded-lg border bg-white hover:bg-slate-50"
+               href="<?=build_url($q,$cap,$page+1,$perPage)?>">Sau »</a>
+          <?php endif; ?>
+        </nav>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="categoryModal" class="modal">
+  <div class="modal-content">
+    <div class="flex justify-between items-center mb-6">
+      <h2 id="modalTitle" class="text-2xl font-bold">Thêm Danh mục</h2>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 6-12 12m0-12 12 12"/></svg>
+      </button>
+    </div>
+    
+    <form id="categoryForm" class="space-y-4">
+      <input type="hidden" id="categoryId">
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Tên danh mục <span class="text-red-500">*</span></label>
+        <input type="text" id="tendm" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+      </div>
+      
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Cấp danh mục <span class="text-red-500">*</span></label>
+          <select id="cap" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+            <option value="">-- Chọn cấp --</option>
+            <option value="1">Cấp 1</option>
+            <option value="2">Cấp 2</option>
+            <option value="3">Cấp 3</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Danh mục cha</label>
+          <select id="parent_id" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+            <option value="">-- Không có --</option>
+            <?php foreach($parentCats as $c): ?>
+              <option value="<?=$c['madm']?>"><?=$c['tendm']?> (Cấp <?=$c['cap']?>)</option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      </div>
+      
+      <div>
+        <label class="block text-sm font-medium mb-1">Tên file hình ảnh (sẽ tự thêm /pharmacy-management/ ở đầu)</label>
+        <input type="text" id="img_url" placeholder="static/img/icon/example.webp" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <p class="text-xs text-slate-500 mt-1">Ví dụ: Nếu nhập "static/img/icon/example.webp", sẽ lưu thành "/pharmacy-management/static/img/icon/example.webp"</p>
+      </div>
+      
+      <div id="parentWarning" class="text-sm text-red-500 hidden mt-2">
+        ⚠️ Danh mục Cấp 2 và Cấp 3 bắt buộc phải chọn Danh mục cha.
+      </div>
+      
+      <div class="flex gap-3 pt-4">
+        <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+          Lưu
+        </button>
+        <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition">
+          Hủy
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const API_URL = 'http://localhost/pharmacy-management/api/api_management.php';
+const IMAGE_PREFIX = '/pharmacy-management/';
+
+// Xử lý sự kiện thay đổi Cấp để hiển thị cảnh báo
+document.getElementById('cap').addEventListener('change', (e) => {
+    const cap = parseInt(e.target.value);
+    const parentWarning = document.getElementById('parentWarning');
+    if (cap === 2 || cap === 3) {
+        parentWarning.classList.remove('hidden');
+    } else {
+        parentWarning.classList.add('hidden');
+    }
+});
+
+// Mở modal thêm
+function openAddModal() {
+  document.getElementById('modalTitle').textContent = 'Thêm Danh mục';
+  document.getElementById('categoryForm').reset();
+  document.getElementById('categoryId').value = '';
+  document.getElementById('parentWarning').classList.add('hidden');
+  document.getElementById('categoryModal').classList.add('active');
+}
+
+// Mở modal sửa
+async function openEditModal(id) {
+  try {
+    const response = await fetch(`${API_URL}?madm=${id}`);
+    const result = await response.json();
+    
+    if (!result.success) {
+      alert(result.error || 'Không tìm thấy danh mục!');
+      return;
+    }
+    
+    const category = result.data;
+    
+    document.getElementById('modalTitle').textContent = 'Sửa Danh mục';
+    document.getElementById('categoryId').value = category.madm;
+    document.getElementById('tendm').value = category.tendm || '';
+    document.getElementById('cap').value = category.cap || '';
+    document.getElementById('parent_id').value = category.parent_id || '';
+    // Chỉ hiển thị phần sau prefix nếu có
+    document.getElementById('img_url').value = (category.img_url || '').replace(IMAGE_PREFIX, '');
+    
+    const cap = parseInt(category.cap);
+    const parentWarning = document.getElementById('parentWarning');
+    if (cap === 2 || cap === 3) {
+        parentWarning.classList.remove('hidden');
+    } else {
+        parentWarning.classList.add('hidden');
+    }
+    
+    document.getElementById('categoryModal').classList.add('active');
+  } catch (error) {
+    alert('Lỗi khi tải dữ liệu: ' + error.message);
+  }
+}
+
+// Đóng modal
+function closeModal() {
+  document.getElementById('categoryModal').classList.remove('active');
+}
+
+// Xử lý form submit
+document.getElementById('categoryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const id = document.getElementById('categoryId').value;
+  const cap = parseInt(document.getElementById('cap').value);
+  let img_url = document.getElementById('img_url').value.trim();
+  
+  // Tự động thêm prefix nếu có giá trị img_url
+  if (img_url) {
+    img_url = IMAGE_PREFIX + img_url;
+  }
+  
+  const parent_id = document.getElementById('parent_id').value ? parseInt(document.getElementById('parent_id').value) : null;
+  
+  if ((cap === 2 || cap === 3) && !parent_id) {
+      alert('Danh mục Cấp 2 và Cấp 3 bắt buộc phải chọn Danh mục cha.');
+      return;
+  }
+  
+  const data = {
+    tendm: document.getElementById('tendm').value,
+    cap: cap,
+    parent_id: parent_id,
+    img_url: img_url
+  };
+  
+  try {
+    let url = API_URL;
+    let method = 'POST';
+    if (id) {
+      url = `${API_URL}?madm=${id}`;
+      method = 'PUT';
+    }
+    const response = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(id ? 'Cập nhật danh mục thành công!' : 'Thêm danh mục thành công!');
+      closeModal();
+      location.reload();
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không xác định'));
+    }
+  } catch (error) {
+    alert('Lỗi kết nối: ' + error.message);
+  }
+});
+
+// Xóa danh mục
+async function deleteCategory(id) {
+  if (!confirm('Bạn có chắc muốn xóa danh mục này? Việc này có thể ảnh hưởng đến các sản phẩm và danh mục con liên quan.')) return;
+  
+  try {
+    const response = await fetch(`${API_URL}?madm=${id}`, {
+      method: 'DELETE'
+    });
+    const result = await response.json();
+    
+    if (result.success) {
+      alert('Xóa thành công!');
+      location.reload();
+    } else {
+      alert('Lỗi: ' + (result.error || 'Không xác định'));
+    }
+  } catch (error) {
+    alert('Lỗi kết nối: ' + error.message);
+  }
+}
+
+// Đóng modal khi click bên ngoài
+document.getElementById('categoryModal').addEventListener('click', (e) => {
+  if (e.target.id === 'categoryModal') closeModal();
+});
+
+// Script cho hiệu ứng đếm số và fade-in
+document.querySelectorAll('[data-count]').forEach(el=>{
+  const target=+el.dataset.count; let v=0, step=Math.max(1, Math.round(target/30));
+  const tick=()=>{ v+=step; if(v>target) v=target; el.textContent=new Intl.NumberFormat('vi-VN').format(v); if(v<target) requestAnimationFrame(tick); };
+  tick();
+});
+const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('fade-in')), {threshold:.12});
+document.querySelectorAll('.stat, .card').forEach(c=>io.observe(c));
+</script>
 </body>
 </html>
