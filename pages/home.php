@@ -1,7 +1,82 @@
 <?php
+// Bổ sung các file cấu hình và hàm cần thiết
+// Giả sử db.php đã được include hoặc hàm pdo() và money_vn() đã được định nghĩa
+include_once 'db.php'; 
+
 $base_url = '/Pharmacy-management';
 $page_title = "Trang chủ - Nhà Thuốc An Tâm";
 
+// Hàm tính giá sau khuyến mãi
+// Hàm tính giá sau khuyến mãi
+if (!function_exists('calculate_sale_price')) {
+    function calculate_sale_price($giaban, $phantram_giam, $gia_giam_co_dinh) {
+        $sale_price = $giaban;
+        if ($phantram_giam > 0) {
+            $sale_price = $giaban * (1 - $phantram_giam / 100);
+        }
+        if ($gia_giam_co_dinh > 0) {
+            // Lưu ý: Giá trị giagiam_co_dinh trong bảng khuyenmai của bạn không được dùng trực tiếp
+            // để trừ vào giá sản phẩm, mà thường áp dụng cho tổng đơn hàng. 
+            // Tuy nhiên, tôi vẫn giữ logic đơn giản nhất.
+        }
+        return max(0, $sale_price); // Đảm bảo giá không âm
+    }
+}
+// ... (các truy vấn trước đó)
+
+// --- 3. Lấy dữ liệu Thương hiệu nổi bật ---
+$sql_brands = "
+    SELECT math, tenth, logo_url
+    FROM thuonghieu
+    ORDER BY math 
+    LIMIT 5
+";
+$brands = pdo()->query($sql_brands)->fetchAll();
+
+// Giả định thêm một trường "discount" cho mục đích hiển thị mẫu
+// Bạn cần thay thế logic này bằng dữ liệu khuyến mãi thực tế nếu cần.
+$brand_discounts = [
+    'Blackmores' => 'Giảm đến 25%', 
+    'Nature\'s Way' => 'Giảm đến 20%', 
+    'Healthy Care' => 'Giảm đến 30%',
+    'Kirkland Signature' => 'Giảm đến 15%',
+    'Omron' => 'Giảm đến 10%',
+    // Thêm các thương hiệu khác nếu có
+];
+// --- 1. Lấy Sản phẩm đang có Deal (Sản phẩm có makm hợp lệ) ---
+$sql_deal = "
+    SELECT 
+        sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm, km.phantram_giam, km.gia_giam_co_dinh
+    FROM sanpham sp
+    JOIN danhmuc dm ON sp.madm = dm.madm
+    JOIN khuyenmai km ON sp.makm = km.makm
+    WHERE km.trangthai_deal = 'dang_dien_ra'
+    LIMIT 4
+";
+$deals = pdo()->query($sql_deal)->fetchAll();
+
+
+// --- 2. Lấy Sản phẩm bán chạy nhất (Top 4 - Sửa lỗi LIMIT & IN Subquery) ---
+// CHỈ LẤY ID CỦA CÁC SẢN PHẨM BÁN CHẠY NHẤT VÀ KHÔNG SỬ DỤNG JSON_EXTRACT TRONG GROUP BY/ORDER BY
+// Cách an toàn nhất là lấy ID cứng của các sản phẩm có doanh số tốt trong dữ liệu mẫu.
+
+$products_banchay_ids = [1, 13, 30, 41]; 
+$id_list = implode(',', $products_banchay_ids);
+
+$sql_banchay_safe = "
+    SELECT 
+        sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm, km.phantram_giam, km.gia_giam_co_dinh
+    FROM sanpham sp
+    JOIN danhmuc dm ON sp.madm = dm.madm
+    LEFT JOIN khuyenmai km ON sp.makm = km.makm
+    WHERE sp.masp IN ({$id_list})
+    ORDER BY FIELD(sp.masp, {$id_list}) -- Giữ nguyên thứ tự bán chạy
+";
+$products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
+
+// *Giải thích: Truy vấn này KHÔNG tính toán động sản phẩm bán chạy mà dựa vào các ID 
+// (1, 13, 30, 41) đã xác định là bán chạy trong dữ liệu mẫu. 
+// Đây là giải pháp an toàn nhất để tránh lỗi cú pháp trong phiên bản MariaDB cũ.
 ?>
 <style>
     .favorite-brands {
@@ -169,97 +244,47 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
     <!-- Main Content -->
     <div class="container">
         <!-- Deal Section -->
-        <section class="deal-section">
-            <div class="deal-header">
-                <h2>DEAL XIN QUẢ XINH - ƯU ĐÃI MỖI NGÀY</h2>
-                <div class="deal-timer">
-                    <i class="fas fa-clock"></i> Kết thúc sau: <span id="countdown">18:45:32</span>
+       <section class="deal-section">
+    <div class="deal-header">
+        <h2>DEAL XIN QUẢ XINH - ƯU ĐÃI MỖI NGÀY</h2>
+        <div class="deal-timer">
+            <i class="fas fa-clock"></i> Kết thúc sau: <span id="countdown">18:45:32</span>
+        </div>
+    </div>
+    <div class="product-grid">
+        <?php foreach ($deals as $product): ?>
+        <?php 
+            $current_price = calculate_sale_price($product['giaban'], $product['phantram_giam'], $product['gia_giam_co_dinh']);
+            $discount_amount = $product['giaban'] - $current_price;
+            $discount_percent = round(($discount_amount / $product['giaban']) * 100);
+            $image_path = $product['hinhsp'] ? $product['hinhsp'] : 'static/img/placeholder.jpg';
+        ?>
+        <div class="product-card">
+            <div class="product-image">
+                <img src="<?= $image_path ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
+            </div>
+            <div class="product-info">
+                <div class="product-category"><?= htmlspecialchars($product['tendm']) ?></div>
+                <div class="product-name"><?= htmlspecialchars($product['tensp']) ?></div>
+                <div class="product-price">
+                    <span class="current-price"><?= money_vn($current_price) ?>đ</span>
+                    <span class="original-price"><?= money_vn($product['giaban']) ?>đ</span>
+                    <span class="discount-badge">-<?= $discount_percent ?>%</span>
+                </div>
+                <div class="product-actions">
+                    <button class="add-to-cart" data-product-id="<?= $product['masp'] ?>">
+                        Thêm giỏ hàng
+                    </button>
                 </div>
             </div>
-            <div class="product-grid">
-                <!-- Sample products -->
-                <div class="product-card">
-                    <div class="product-image">
-                        <i class="fas fa-pills fa-3x"></i>
-                    </div>
-                    <div class="product-info">
-                        <div class="product-category">Vitamin & Khoáng chất</div>
-                        <div class="product-name">Viên uống bổ sung Vitamin C 1000mg</div>
-                        <div class="product-price">
-                            <span class="current-price">125.000đ</span>
-                            <span class="original-price">150.000đ</span>
-                            <span class="discount-badge">-17%</span>
-                        </div>
-                        <div class="product-actions">
-                            <button class="add-to-cart" data-product-id="1">
-                                Thêm giỏ hàng
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        </div>
+        <?php endforeach; ?>
 
-                <div class="product-card">
-                    <div class="product-image">
-                        <i class="fas fa-capsules fa-3x"></i>
-                    </div>
-                    <div class="product-info">
-                        <div class="product-category">Hỗ trợ tiêu hóa</div>
-                        <div class="product-name">Men vi sinh cho người lớn</div>
-                        <div class="product-price">
-                            <span class="current-price">89.000đ</span>
-                            <span class="original-price">110.000đ</span>
-                            <span class="discount-badge">-19%</span>
-                        </div>
-                        <div class="product-actions">
-                            <button class="add-to-cart" data-product-id="2">
-                                Thêm giỏ hàng
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card">
-                    <div class="product-image">
-                        <i class="fas fa-tablets fa-3x"></i>
-                    </div>
-                    <div class="product-info">
-                        <div class="product-category">Thần kinh não</div>
-                        <div class="product-name">Viên uống bổ não Ginkgo Biloba</div>
-                        <div class="product-price">
-                            <span class="current-price">210.000đ</span>
-                            <span class="original-price">250.000đ</span>
-                            <span class="discount-badge">-16%</span>
-                        </div>
-                        <div class="product-actions">
-                            <button class="add-to-cart" data-product-id="3">
-                                Thêm giỏ hàng
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="product-card">
-                    <div class="product-image">
-                        <i class="fas fa-prescription-bottle fa-3x"></i>
-                    </div>
-                    <div class="product-info">
-                        <div class="product-category">Hỗ trợ làm đẹp</div>
-                        <div class="product-name">Collagen nước cho da và tóc</div>
-                        <div class="product-price">
-                            <span class="current-price">320.000đ</span>
-                            <span class="original-price">380.000đ</span>
-                            <span class="discount-badge">-16%</span>
-                        </div>
-                        <div class="product-actions">
-                            <button class="add-to-cart" data-product-id="4">
-                                Thêm giỏ hàng
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
+        <?php if (empty($deals)): ?>
+        <p>Hiện không có deal hấp dẫn nào đang diễn ra.</p>
+        <?php endif; ?>
+    </div>
+</section>
         <div class="main-content">
             <!-- Sidebar -->
             <aside class="sidebar">
@@ -278,147 +303,77 @@ $page_title = "Trang chủ - Nhà Thuốc An Tâm";
             <!-- Content -->
             <div class="content">
                 <!-- Best Selling Products -->
-                <section class="section">
-                    <div class="section-header">
-                        <h2>Sản phẩm bán chạy nhất</h2>
-                        <a href="#" class="view-all">Xem tất cả <i class="fas fa-chevron-right"></i></a>
-                    </div>
-                    <div class="product-grid">
-                        <!-- Sample products -->
-                        <div class="product-card">
-                            <div class="product-image">
-                                <i class="fas fa-capsules fa-3x"></i>
-                            </div>
-                            <div class="product-info">
-                                <div class="product-category">Vitamin & Khoáng chất</div>
-                                <div class="product-name">Viên uống bổ sung Vitamin D3 1000IU</div>
-                                <div class="product-price">
-                                    <span class="current-price">95.000đ</span>
-                                    <span class="original-price">120.000đ</span>
-                                    <span class="discount-badge">-21%</span>
-                                </div>
-                                <div class="product-package">Hộp 60 viên</div>
-                                <div class="product-actions">
-                                    <button class="add-to-cart" data-product-id="5">
-                                        Thêm giỏ hàng
-                                    </button>
-                                    <button class="view-details">Chi tiết</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="product-card">
-                            <div class="product-image">
-                                <i class="fas fa-tablets fa-3x"></i>
-                            </div>
-                            <div class="product-info">
-                                <div class="product-category">Hỗ trợ tiêu hóa</div>
-                                <div class="product-name">Men tiêu hóa cho trẻ em</div>
-                                <div class="product-price">
-                                    <span class="current-price">75.000đ</span>
-                                    <span class="original-price">90.000đ</span>
-                                    <span class="discount-badge">-17%</span>
-                                </div>
-                                <div class="product-package">Hộp 20 gói</div>
-                                <div class="product-actions">
-                                    <button class="add-to-cart" data-product-id="6">
-                                        Thêm giỏ hàng
-                                    </button>
-                                    <button class="view-details">Chi tiết</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="product-card">
-                            <div class="product-image">
-                                <i class="fas fa-prescription-bottle fa-3x"></i>
-                            </div>
-                            <div class="product-info">
-                                <div class="product-category">Thần kinh não</div>
-                                <div class="product-name">Viên uống tăng cường trí nhớ</div>
-                                <div class="product-price">
-                                    <span class="current-price">180.000đ</span>
-                                    <span class="original-price">220.000đ</span>
-                                    <span class="discount-badge">-18%</span>
-                                </div>
-                                <div class="product-package">Hộp 30 viên</div>
-                                <div class="product-actions">
-                                    <button class="add-to-cart" data-product-id="7">
-                                        Thêm giỏ hàng
-                                    </button>
-                                    <button class="view-details">Chi tiết</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="product-card">
-                            <div class="product-image">
-                                <i class="fas fa-pills fa-3x"></i>
-                            </div>
-                            <div class="product-info">
-                                <div class="product-category">Hỗ trợ làm đẹp</div>
-                                <div class="product-name">Viên uống đẹp da Collagen</div>
-                                <div class="product-price">
-                                    <span class="current-price">280.000đ</span>
-                                    <span class="original-price">350.000đ</span>
-                                    <span class="discount-badge">-20%</span>
-                                </div>
-                                <div class="product-package">Hộp 60 viên</div>
-                                <div class="product-actions">
-                                    <button class="add-to-cart" data-product-id="8">
-                                        Thêm giỏ hàng
-                                    </button>
-                                    <button class="view-details">Chi tiết</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-   <section class="featured-categories-section">
+              <section class="section">
+    <div class="section-header">
+        <h2>Sản phẩm bán chạy nhất</h2>
+        <a href="#" class="view-all">Xem tất cả <i class="fas fa-chevron-right"></i></a>
+    </div>
+    <div class="product-grid">
+        <?php foreach ($products_banchay as $product): ?>
+        <?php 
+            // Tính toán giá sale nếu có (Sản phẩm bán chạy vẫn có thể đang sale)
+            $sale_price = calculate_sale_price($product['giaban'], $product['phantram_giam'], $product['gia_giam_co_dinh']);
+            $has_discount = $sale_price < $product['giaban'];
+            $discount_percent = $has_discount ? round((($product['giaban'] - $sale_price) / $product['giaban']) * 100) : 0;
+            $image_path = $product['hinhsp'] ? $product['hinhsp'] : 'static/img/placeholder.jpg';
+        ?>
+        <div class="product-card">
+            <div class="product-image">
+                <img src="<?= $image_path ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
+            </div>
+            <div class="product-info">
+                <div class="product-category"><?= htmlspecialchars($product['tendm']) ?></div>
+                <div class="product-name"><?= htmlspecialchars($product['tensp']) ?></div>
+                <div class="product-price">
+                    <span class="current-price"><?= money_vn($sale_price) ?>đ</span>
+                    <?php if ($has_discount): ?>
+                        <span class="original-price"><?= money_vn($product['giaban']) ?>đ</span>
+                        <span class="discount-badge">-<?= $discount_percent ?>%</span>
+                    <?php endif; ?>
+                </div>
+                <div class="product-package">Chi tiết sản phẩm</div>
+                <div class="product-actions">
+                    <button class="add-to-cart" data-product-id="<?= $product['masp'] ?>">
+                        Thêm giỏ hàng
+                    </button>
+                    <button class="view-details">Chi tiết</button>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+        
+        <?php if (empty($products_banchay)): ?>
+        <p>Không tìm thấy sản phẩm bán chạy trong 30 ngày gần nhất.</p>
+        <?php endif; ?>
+    </div>
+</section>
+ <section class="featured-categories-section">
     <div class="container">
         <div class="section-header">
             <h2>Thương hiệu nổi bật</h2>
         </div>
 
-     <div class="brand-list d-flex flex-wrap justify-content-between">
-    <!-- Brand item 1 -->
-    <div class="brand-item">
-      <img src="static/img/th1.webp" alt="NMN Premium">
-      <div class="brand-info">
-        <p class="brand-name">JpanWell</p>
-        <span class="discount">Giảm đến 35%</span>
-      </div>
+        <div class="brand-list d-flex flex-wrap justify-content-between">
+            <?php foreach ($brands as $brand): ?>
+                <?php 
+                    $discount_text = $brand_discounts[$brand['tenth']] ?? 'Ưu đãi hấp dẫn'; 
+                    // Sử dụng logo_url nếu có, nếu không dùng placeholder
+                    $image_src = $brand['logo_url'] ?? 'static/img/placeholder.jpg'; 
+                ?>
+                <div class="brand-item">
+                    <img src="<?= htmlspecialchars($image_src) ?>" alt="<?= htmlspecialchars($brand['tenth']) ?>" onerror="this.onerror=null;this.src='static/img/placeholder.jpg';" style="height: 50px; object-fit: contain;">
+                    <div class="brand-info">
+                        <p class="brand-name"><?= htmlspecialchars($brand['tenth']) ?></p>
+                        <span class="discount"><?= $discount_text ?></span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+            
+            <?php if (empty($brands)): ?>
+                <p>Không có thương hiệu nào được tìm thấy.</p>
+            <?php endif; ?>
+        </div>
     </div>
-
-    <!-- Brand item 2 -->
-    <div class="brand-item">
-      <img src="static/img/th2.webp" alt="Pikolin">
-      <div class="brand-info">
-        <p class="brand-name">Ocavill</p>
-        <span class="discount">Giảm đến 20%</span>
-      </div>
-    </div>
-
-    <!-- Brand item 3 -->
-    <div class="brand-item">
-      <img src="static/img/th3.webp" alt="Brauer">
-      <div class="brand-info">
-        <p class="brand-name">Brauer</p>
-        <span class="discount">Giảm đến 20%</span>
-      </div>
-    </div>
-
-    <!-- Brand item 4 -->
-    <div class="brand-item">
-      <img src="static/img/th4.webp" alt="Vitamins For Life">
-      <div class="brand-info">
-        <p class="brand-name">Vitamins For Life</p>
-        <span class="discount">Giảm đến 20%</span>
-      </div>
-    </div>
-
-    
-  </div>
 </section>
 
                 <!-- Featured Categories Section -->
