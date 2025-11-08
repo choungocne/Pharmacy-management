@@ -1,39 +1,44 @@
 <?php
 // admin/products.php - Tích hợp API
-$pdo = new PDO(
-  'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
-  [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
-);
+
+// Kết nối PDO kiểu bền vững
+$pdo = null;
+foreach ([__DIR__ . '/../db.php', __DIR__ . '/db.php'] as $try) {
+  if (file_exists($try)) { require $try; break; }
+}
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+  $dsn='mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4';
+  $pdo=new PDO($dsn,'root','',[
+    PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
+  ]);
+  $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+  $pdo->exec("SET collation_connection='utf8mb4_unicode_ci'");
+}
 
 $q  = trim($_GET['q'] ?? '');
 $dm = (int)($_GET['dm'] ?? 0);
-$soonDays     = 60;   // HSD sắp hết hạn
-$lowThreshold = 10;   // tồn thấp
-$perPage      = max(1,(int)($_GET['per'] ?? 9));  // 3 cột x 3 hàng
+$soonDays     = 60;    // HSD sắp hết hạn
+$lowThreshold = 10;    // tồn thấp
+$perPage      = max(1,(int)($_GET['per'] ?? 9));
 $page         = max(1,(int)($_GET['page'] ?? 1));
 
 // Hàm gọi API
 function callAPI($endpoint, $params = []) {
-    $baseURL = 'http://localhost/pharmacy-management/api/products.php';
-    $url = $baseURL . $endpoint;
-    
-    if (!empty($params)) {
-        $url .= '?' . http_build_query($params);
-    }
-    
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    if ($httpCode === 200 && $response) {
-        return json_decode($response, true);
-    }
-    
-    return null;
+  $baseURL = 'http://localhost/pharmacy-management/api/products.php';
+  $url = $baseURL . $endpoint;
+  if (!empty($params)) {
+    $url .= '?' . http_build_query($params);
+  }
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+  $response = curl_exec($ch);
+  $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+  if ($httpCode === 200 && $response) return json_decode($response, true);
+  return null;
 }
 
 /* ===== STATS (giữ như cũ vì API chưa có endpoint stats) ===== */
@@ -51,104 +56,84 @@ $lowStock        = (int)$pdo->query("
 /* ===== FILTER LIST (danh mục) ===== */
 $cats = $pdo->query("SELECT madm,tendm FROM danhmuc WHERE cap=3 ORDER BY tendm")->fetchAll();
 
-/* ===== LẤY DỮ LIỆU TỪ API ===== */
-$apiParams = [
-    'q' => $q,
-    'dm' => $dm,
-    'per' => $perPage,
-    'page' => $page
-];
-
+/* ===== LẤY DỮ LIỆU TỪ API hoặc FALLBACK DB ===== */
+$apiParams = ['q'=>$q,'dm'=>$dm,'per'=>$perPage,'page'=>$page];
 $apiResponse = callAPI('', $apiParams);
 
 if ($apiResponse && isset($apiResponse['data'])) {
-    $totalFiltered = $apiResponse['total'];
-    $pages = $apiResponse['pages'];
-    $page = $apiResponse['current_page'];
-    $rows = $apiResponse['data'];
-    
-    // Xử lý dữ liệu để tương thích với UI cũ
-    foreach ($rows as &$r) {
-        // Chuyển đổi các trường để khớp với UI
-        $r['tendv'] = $r['donvitinh'] ?? '';
-        $r['ton'] = $r['tonkho'] ?? 0;
-        
-        // Xử lý hình ảnh: Đảm bảo prefix đúng và thay thế chữ hoa/thường
-        if (empty($r['hinhsp'])) {
-            $r['image'] = '/pharmacy-management/uploads/sp/placeholder.jpg';
-        } else {
-            // Thêm prefix nếu chưa có (giả sử SQL lưu chỉ tên file, nhưng nếu đã có prefix thì giữ nguyên)
-            if (!str_starts_with($r['hinhsp'], '/Pharmacy-management/uploads/sp/')) {
-                $r['hinhsp'] = '/Pharmacy-management/uploads/sp/' . $r['hinhsp'];
-            }
-            $r['image'] = str_replace('/Pharmacy-management/', '/pharmacy-management/', $r['hinhsp']);
-        }
-        
-        // Tính số lượng hết hạn
-        if (!empty($r['hsd']) && strtotime($r['hsd']) < time() && $r['tonkho'] > 0) {
-            $r['sl_het_han'] = $r['tonkho'];
-        } else {
-            $r['sl_het_han'] = 0;
-        }
-        
-        // HSD gần nhất
-        $r['hsd_gan_nhat'] = (!empty($r['hsd']) && $r['tonkho'] > 0) ? $r['hsd'] : null;
-    }
-    unset($r);
+  $totalFiltered = (int)$apiResponse['total'];
+  $pages = (int)$apiResponse['pages'];
+  $page  = (int)$apiResponse['current_page'];
+  $rows  = $apiResponse['data'];
+
+  // Chuẩn hoá dữ liệu để khớp UI cũ
+  foreach ($rows as &$r) {
+    $r['tendv'] = $r['donvitinh'] ?? ($r['tendv'] ?? '');
+    $r['ton']   = (int)($r['tonkho'] ?? ($r['ton'] ?? 0));
+    $r['image'] = str_replace('/Pharmacy-management/','/pharmacy-management/',
+                 $r['hinhsp'] ?? ($r['image'] ?? '/pharmacy-management/uploads/sp/placeholder.jpg'));
+    $r['sl_het_han']  = (int)($r['sl_het_han'] ?? 0);
+    $r['hsd_gan_nhat'] = $r['hsd_gan_nhat'] ?? ((!empty($r['hsd']) && $r['ton']>0) ? $r['hsd'] : null);
+  }
+  unset($r);
+
 } else {
-    // Fallback về truy vấn trực tiếp nếu API lỗi
-    $countSql = "
+  // Đếm tổng có lọc
+  $countSql = "
     SELECT COUNT(*) FROM sanpham sp
     WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
-      AND (:dm=0 OR sp.madm=:dm)";
-    $cst = $pdo->prepare($countSql);
-    $cst->execute([':q'=>$q, ':dm'=>$dm]);
-    $totalFiltered = (int)$cst->fetchColumn();
+      AND (:dm=0 OR sp.madm=:dm)
+  ";
+  $cst = $pdo->prepare($countSql);
+  $cst->execute([':q'=>$q, ':dm'=>$dm]);
+  $totalFiltered = (int)$cst->fetchColumn();
 
-    $pages = max(1, (int)ceil($totalFiltered / $perPage));
-    if ($page > $pages) $page = $pages;
-    $offset = ($page - 1) * $perPage;
+  $pages  = max(1, (int)ceil($totalFiltered / $perPage));
+  $page   = min($page, $pages);
+  $offset = ($page - 1) * $perPage;
 
-    $sql = "
-    SELECT sp.masp, sp.tensp, sp.giaban, sp.makm,
-           REPLACE(
-               COALESCE(sp.hinhsp, '/Pharmacy-management/uploads/sp/placeholder.jpg'),
-               '/Pharmacy-management/',
-               '/pharmacy-management/'
-           ) AS image,
-           dm.tendm, dv.tendv,
-           CASE WHEN tk.hsd < CURDATE()  AND tk.soluong>0 THEN tk.soluong ELSE 0 END AS sl_het_han,
-           CASE WHEN tk.soluong>0 THEN tk.hsd END                           AS hsd_gan_nhat,
-           tk.soluong AS ton
+  // Lấy dữ liệu gộp theo sản phẩm (không dùng sp.giagiam)
+  $sql = "
+    SELECT
+      sp.masp,
+      sp.tensp,
+      sp.giaban,
+      REPLACE(COALESCE(sp.hinhsp,'/Pharmacy-management/uploads/sp/placeholder.jpg'),
+              '/Pharmacy-management/','/pharmacy-management/') AS image,
+      dm.tendm,
+      dv.tendv,
+      /* Tổng SL hết hạn còn tồn */
+      SUM(CASE WHEN tk.hsd < CURDATE() AND tk.soluong>0 THEN tk.soluong ELSE 0 END) AS sl_het_han,
+      /* HSD gần nhất còn hàng */
+      MIN(CASE WHEN tk.soluong>0 AND tk.hsd>=CURDATE() THEN tk.hsd END) AS hsd_gan_nhat,
+      /* Tổng tồn theo tất cả lô */
+      COALESCE(SUM(tk.soluong),0) AS ton
     FROM sanpham sp
-    LEFT JOIN danhmuc  dm ON dm.madm=sp.madm
-    LEFT JOIN donvitinh dv ON dv.madv=sp.madv
-    LEFT JOIN tonkho   tk ON tk.masp=sp.masp
+    LEFT JOIN danhmuc  dm ON dm.madm = sp.madm
+    LEFT JOIN donvitinh dv ON dv.madv = sp.madv
+    LEFT JOIN tonkho   tk ON tk.masp = sp.masp
     WHERE (:q='' OR sp.tensp LIKE CONCAT('%',:q,'%'))
       AND (:dm=0 OR sp.madm=:dm)
+    GROUP BY sp.masp, sp.tensp, sp.giaban, image, dm.tendm, dv.tendv
     ORDER BY sp.tensp
-    LIMIT :lim OFFSET :off";
-    $st=$pdo->prepare($sql);
-    $st->bindValue(':q',$q);
-    $st->bindValue(':dm',$dm,PDO::PARAM_INT);
-    $st->bindValue(':lim',$perPage,PDO::PARAM_INT);
-    $st->bindValue(':off',$offset,PDO::PARAM_INT);
-    $st->execute();
-    $rows=$st->fetchAll();
-    
-    // Sửa thêm ở fallback: Thêm prefix nếu cần
-    foreach ($rows as &$r) {
-        if (!str_starts_with($r['image'], '/pharmacy-management/uploads/sp/')) {
-            $r['image'] = '/pharmacy-management/uploads/sp/' . basename($r['image']);
-        }
-    }
-    unset($r);
+    LIMIT :lim OFFSET :off
+  ";
+  $st = $pdo->prepare($sql);
+  $st->bindValue(':q',  $q);
+  $st->bindValue(':dm', $dm,   PDO::PARAM_INT);
+  $st->bindValue(':lim',$perPage, PDO::PARAM_INT);
+  $st->bindValue(':off',$offset,  PDO::PARAM_INT);
+  $st->execute();
+  $rows = $st->fetchAll();
 }
 
+// offset cho phần hiển thị phân trang
 $offset = ($page - 1) * $perPage;
 
 /* helper build url */
-function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SELF']).'?'.http_build_query(['q'=>$q,'dm'=>$dm,'page'=>$page,'per'=>$per]); }
+function build_url($q,$dm,$page,$per){
+  return htmlspecialchars($_SERVER['PHP_SELF']).'?'.http_build_query(['q'=>$q,'dm'=>$dm,'page'=>$page,'per'=>$per]);
+}
 ?>
 <!doctype html>
 <html lang="vi">
@@ -243,6 +228,9 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
           }
           $low = ($r['ton']!==null && (int)$r['ton']>0 && (int)$r['ton'] <= $lowThreshold)
                   ? '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-violet-100 text-violet-700">Tồn thấp</span>' : '';
+          $price = (float)($r['giaban'] ?? 0);
+          $sale  = 0;      // DB không có cột giagiam
+          $show  = $price; // giá hiển thị = giaban
         ?>
         <div class="glass rounded-2xl p-4 card fade-in border border-slate-200/70">
           <div class="flex gap-4">
@@ -254,12 +242,15 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
               </div>
               <div class="text-sm text-slate-500 mt-0.5">
                 <?=htmlspecialchars($r['tendm']??'Khác')?> • <?=htmlspecialchars($r['tendv']??'')?>
-                <?php if($r['hsd_gan_nhat']): ?>
+                <?php if(!empty($r['hsd_gan_nhat'])): ?>
                   • HSD gần nhất: <?=date('d/m/Y', strtotime($r['hsd_gan_nhat']))?>
                 <?php endif; ?>
               </div>
               <div class="mt-2">
-                
+                <?php if($sale>0): ?>
+                  <span class="text-slate-400 line-through mr-2"><?=number_format($price)?>đ</span>
+                  <span class="text-blue-600 font-bold"><?=number_format($show)?>đ</span>
+                <?php else: ?>
                   <span class="text-blue-600 font-bold"><?=number_format($price)?>đ</span>
                 
                 <?php if($r['ton']!==null): ?>
@@ -267,11 +258,11 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
                 <?php endif; ?>
               </div>
               <div class="mt-3 flex gap-2">
-                <a href="/pharmacy-management/product_detail.php?masp=<?=$r['masp']?>"
+                <a href="/pharmacy-management/product_detail.php?masp=<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm transition">Xem</a>
-                <button onclick="openEditModal(<?=$r['masp']?>)"
+                <button onclick="openEditModal(<?= (int)$r['masp'] ?>)"
                    class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</button>
-                <button onclick="deleteProduct(<?=$r['masp']?>)"
+                <button onclick="deleteProduct(<?= (int)$r['masp'] ?>)"
                    class="px-3 py-1.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm transition">Xóa</button>
               </div>
             </div>
@@ -330,15 +321,15 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 6-12 12m0-12 12 12"/></svg>
       </button>
     </div>
-    
+
     <form id="productForm" class="space-y-4">
       <input type="hidden" id="productId">
-      
+
       <div>
         <label class="block text-sm font-medium mb-1">Tên sản phẩm <span class="text-red-500">*</span></label>
         <input type="text" id="tensp" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
-      
+
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium mb-1">Giá bán <span class="text-red-500">*</span></label>
@@ -349,7 +340,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
           <input type="number" id="giagiam" min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
         </div>
       </div>
-      
+
       <div>
         <label class="block text-sm font-medium mb-1">Danh mục <span class="text-red-500">*</span></label>
         <select id="madm" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
@@ -359,33 +350,32 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
           <?php endforeach; ?>
         </select>
       </div>
-      
+
       <div>
-        <label class="block text-sm font-medium mb-1">Tên file hình ảnh (sẽ tự thêm /Pharmacy-management/uploads/sp/ ở đầu) </label>
-        <input type="text" id="hinhsp" placeholder="example.jpg" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
-        <p class="text-xs text-slate-500 mt-1">Ví dụ: Nếu nhập "example.jpg", sẽ lưu thành "/Pharmacy-management/uploads/sp/example.jpg"</p>
+        <label class="block text-sm font-medium mb-1">Hình ảnh (URL)</label>
+        <input type="text" id="hinhsp" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
-      
+
       <div>
         <label class="block text-sm font-medium mb-1">Công dụng</label>
         <textarea id="congdung" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
       </div>
-      
+
       <div>
         <label class="block text-sm font-medium mb-1">Xuất xứ</label>
         <input type="text" id="xuatxu" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
-      
+
       <div>
         <label class="block text-sm font-medium mb-1">Cách dùng</label>
         <textarea id="cachdung" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
       </div>
-      
+
       <div class="flex items-center gap-2">
         <input type="checkbox" id="requires_rx" class="w-4 h-4">
         <label for="requires_rx" class="text-sm">Yêu cầu đơn thuốc</label>
       </div>
-      
+
       <div class="flex gap-3 pt-4">
         <button type="submit" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
           Lưu
@@ -400,9 +390,7 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
 
 <script>
 const API_URL = 'http://localhost/pharmacy-management/api/products.php';
-const IMAGE_PREFIX = '/Pharmacy-management/uploads/sp/';
 
-// Mở modal thêm
 function openAddModal() {
   document.getElementById('modalTitle').textContent = 'Thêm sản phẩm';
   document.getElementById('productForm').reset();
@@ -410,119 +398,67 @@ function openAddModal() {
   document.getElementById('productModal').classList.add('active');
 }
 
-// Mở modal sửa
 async function openEditModal(id) {
   try {
     const response = await fetch(`${API_URL}/${id}`);
     const product = await response.json();
-    
-    if (product.error) {
-      alert('Không tìm thấy sản phẩm!');
-      return;
-    }
-    
+    if (product.error) { alert('Không tìm thấy sản phẩm!'); return; }
     document.getElementById('modalTitle').textContent = 'Sửa sản phẩm';
     document.getElementById('productId').value = product.masp;
     document.getElementById('tensp').value = product.tensp || '';
     document.getElementById('giaban').value = product.giaban || '';
     document.getElementById('giagiam').value = product.giagiam || '';
     document.getElementById('madm').value = product.madm || '';
-    // Sửa: Chỉ hiển thị phần sau prefix (tên file)
-    document.getElementById('hinhsp').value = (product.hinhsp || '').replace(IMAGE_PREFIX, '');
+    document.getElementById('hinhsp').value = product.hinhsp || '';
     document.getElementById('congdung').value = product.congdung || '';
     document.getElementById('xuatxu').value = product.xuatxu || '';
     document.getElementById('cachdung').value = product.cachdung || '';
     document.getElementById('requires_rx').checked = product.requires_rx == 1;
-    
     document.getElementById('productModal').classList.add('active');
-  } catch (error) {
-    alert('Lỗi khi tải dữ liệu: ' + error.message);
-  }
+  } catch (error) { alert('Lỗi khi tải dữ liệu: ' + error.message); }
 }
 
-// Đóng modal
 function closeModal() {
   document.getElementById('productModal').classList.remove('active');
 }
 
-// Xử lý form submit
 document.getElementById('productForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  
   const id = document.getElementById('productId').value;
-  let hinhsp = document.getElementById('hinhsp').value.trim();
-  
-  // Sửa: Tự động thêm prefix nếu có giá trị hinhsp
-  if (hinhsp) {
-    hinhsp = IMAGE_PREFIX + hinhsp;
-  }
-  
   const data = {
     tensp: document.getElementById('tensp').value,
     giaban: document.getElementById('giaban').value,
     giagiam: document.getElementById('giagiam').value || 0,
     madm: document.getElementById('madm').value,
-    hinhsp: hinhsp,  // Đã thêm prefix
+    hinhsp: document.getElementById('hinhsp').value,
     congdung: document.getElementById('congdung').value,
     xuatxu: document.getElementById('xuatxu').value,
     cachdung: document.getElementById('cachdung').value,
     requires_rx: document.getElementById('requires_rx').checked ? 1 : 0
   };
-  
   try {
     let response;
     if (id) {
-      // Sửa
-      response = await fetch(`${API_URL}/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+      response = await fetch(`${API_URL}/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
     } else {
-      // Thêm
-      response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+      response = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
     }
-    
     const result = await response.json();
-    
-    if (result.success) {
-      alert(id ? 'Cập nhật thành công!' : 'Thêm sản phẩm thành công!');
-      closeModal();
-      location.reload();
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không xác định'));
-    }
-  } catch (error) {
-    alert('Lỗi kết nối: ' + error.message);
-  }
+    if (result.success) { alert(id ? 'Cập nhật thành công!' : 'Thêm sản phẩm thành công!'); closeModal(); location.reload(); }
+    else { alert('Lỗi: ' + (result.error || 'Không xác định')); }
+  } catch (error) { alert('Lỗi kết nối: ' + error.message); }
 });
 
-// Xóa sản phẩm
 async function deleteProduct(id) {
   if (!confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
-  
   try {
-    const response = await fetch(`${API_URL}/${id}`, {
-      method: 'DELETE'
-    });
+    const response = await fetch(`${API_URL}/${id}`, { method:'DELETE' });
     const result = await response.json();
-    
-    if (result.success) {
-      alert('Xóa thành công!');
-      location.reload();
-    } else {
-      alert('Lỗi: ' + (result.error || 'Không xác định'));
-    }
-  } catch (error) {
-    alert('Lỗi kết nối: ' + error.message);
-  }
+    if (result.success) { alert('Xóa thành công!'); location.reload(); }
+    else { alert('Lỗi: ' + (result.error || 'Không xác định')); }
+  } catch (error) { alert('Lỗi kết nối: ' + error.message); }
 }
 
-// Đóng modal khi click bên ngoài
 document.getElementById('productModal').addEventListener('click', (e) => {
   if (e.target.id === 'productModal') closeModal();
 });

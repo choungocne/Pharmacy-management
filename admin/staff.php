@@ -439,22 +439,35 @@ include $header;
             <form method="post" class="border rounded-xl p-3">
               <input type="hidden" name="action" value="add_shift">
               <input type="hidden" name="manv" value="<?=$r['manv']?>">
-              <div class="text-sm mb-2 font-semibold">Phân ca</div>
-              <div class="flex gap-2">
-  <input type="date" name="ngay" value="<?=date('Y-m-d')?>" class="border rounded-lg px-2 py-1 text-sm" required>
-  <input type="time" name="start_time" class="border rounded-lg px-2 py-1 text-sm" required>
-  <input type="time" name="end_time" class="border rounded-lg px-2 py-1 text-sm" required>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 items-center gap-2">
+  <input type="date" name="ngay"
+         value="<?=date('Y-m-d')?>"
+         class="border rounded-lg px-2 py-1 text-sm w-full min-w-0" required>
 
-  <select name="maca" class="border rounded-lg px-2 py-1 text-sm">
+  <input type="time" name="start_time"
+         class="border rounded-lg px-2 py-1 text-sm w-full min-w-0" required>
+
+  <input type="time" name="end_time"
+         class="border rounded-lg px-2 py-1 text-sm w-full min-w-0" required>
+
+  <select name="maca"
+          class="border rounded-lg px-2 py-1 text-sm w-full min-w-0">
     <option value="">-- Mã ca --</option>
     <?php foreach($shifts as $s): ?>
       <option value="<?=h($s['maca'])?>"><?=h($s['maca'])?></option>
     <?php endforeach;?>
   </select>
 
-  <input name="note" placeholder="Ghi chú" class="border rounded-lg px-2 py-1 text-sm w-40">
-  <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Gán</button>
+  <!-- Note dài hơn nên cho chiếm 2 cột ở sm, 1 cột ở lg -->
+  <input name="note" placeholder="Ghi chú"
+         class="border rounded-lg px-2 py-1 text-sm w-full min-w-0 sm:col-span-2 lg:col-span-1">
+
+  <!-- Nút: full width ở mobile, auto ở màn lớn -->
+  <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 w-full sm:w-auto">
+    Gán
+  </button>
 </div>
+
 
 
             </form>
