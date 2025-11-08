@@ -110,7 +110,7 @@ if ($apiResponse && isset($apiResponse['data'])) {
     $offset = ($page - 1) * $perPage;
 
     $sql = "
-    SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam,
+    SELECT sp.masp, sp.tensp, sp.giaban, sp.makm,
            REPLACE(
                COALESCE(sp.hinhsp, '/Pharmacy-management/uploads/sp/placeholder.jpg'),
                '/Pharmacy-management/',
@@ -243,7 +243,6 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
           }
           $low = ($r['ton']!==null && (int)$r['ton']>0 && (int)$r['ton'] <= $lowThreshold)
                   ? '<span class="ml-2 px-2 py-0.5 text-xs rounded bg-violet-100 text-violet-700">Tồn thấp</span>' : '';
-          $price=(float)$r['giaban']; $sale=(float)$r['giagiam'];
         ?>
         <div class="glass rounded-2xl p-4 card fade-in border border-slate-200/70">
           <div class="flex gap-4">
@@ -260,12 +259,9 @@ function build_url($q,$dm,$page,$per){ return htmlspecialchars($_SERVER['PHP_SEL
                 <?php endif; ?>
               </div>
               <div class="mt-2">
-                <?php if($sale>0): ?>
-                  <span class="text-slate-400 line-through mr-2"><?=number_format($price)?>đ</span>
-                  <span class="text-blue-600 font-bold"><?=number_format($price-$sale)?>đ</span>
-                <?php else: ?>
+                
                   <span class="text-blue-600 font-bold"><?=number_format($price)?>đ</span>
-                <?php endif; ?>
+                
                 <?php if($r['ton']!==null): ?>
                   <span class="ml-2 text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">Tồn: <?= (int)$r['ton']?></span>
                 <?php endif; ?>
