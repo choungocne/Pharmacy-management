@@ -68,17 +68,32 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
                     ]);
                 $manv=(int)$pdo->lastInsertId();
 
-                if(($cn=(int)postv('chinhanh_id',1))>0){
-                    $pdo->prepare("INSERT INTO nv_chinhanh(manv,chinhanh_id,tu_ngay) VALUES(?,?,?)")
-                        ->execute([$manv,$cn, postv('ngayvl')?:date('Y-m-d')]);
-                }
-                $pdo->prepare("INSERT IGNORE INTO nv_quydinh(manv,max_hours_week) VALUES(?,?)")
-                    ->execute([$manv,(int)postv('max_hours_week',48)]);
+                // cập nhật trực tiếp vào bảng nhanvien
+$cn = (int)postv('chinhanh_id', 0);
+$max = (int)postv('max_hours_week', 48);
+$pdo->prepare("UPDATE nhanvien SET chinhanh_id=?, max_hours_week=? WHERE manv=?")
+    ->execute([$cn ?: null, $max, $manv]);
+
+// khởi tạo lịch sử chi nhánh (JSON) nếu có chọn CN
+if ($cn > 0) {
+    $pdo->prepare("UPDATE nhanvien SET lichsu_chinhanh = JSON_ARRAY(
+        JSON_OBJECT('tu_ngay', ?, 'den_ngay', NULL, 'chinhanh_id', ?)
+    ) WHERE manv=?")->execute([postv('ngayvl')?:date('Y-m-d'), $cn, $manv]);
+}
+
                 // tạo user nếu có bảng
                 try{
-                    $pdo->prepare("INSERT IGNORE INTO auth_user(id,email,full_name,status)
-                                   VALUES(?,?,?,?)")
-                        ->execute([$manv, postv('email')?:("nv$manv@antam.local"), postv('hoten'), 'active']);
+                    $pdo->prepare("INSERT IGNORE INTO auth (id, username, password_hash, email, manv, status)
+               VALUES (?, ?, ?, ?, ?, ?)")
+    ->execute([
+        $manv,
+        'nv'.$manv,
+        password_hash(bin2hex(random_bytes(8)), PASSWORD_BCRYPT),
+        postv('email')?:("nv$manv@antam.local"),
+        $manv,
+        1
+    ]);
+
                 }catch(Throwable $x){}
                 $pdo->commit();
                 $notes[]="Đã thêm nhân viên #$manv.";
@@ -87,74 +102,110 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
             if($act==='update_staff'){
                 $manv=(int)postv('manv');
                 $pdo->prepare("UPDATE nhanvien
-                               SET hoten=?,gt=?,ns=?,ngayvl=?,sdt=?,email=?,vitri=?,trangthai=?,ngaynghi=?
-                               WHERE manv=?")
-                    ->execute([
-                        postv('hoten'),postv('gt','Nam'),
-                        postv('ns')?:null, postv('ngayvl')?:null,
-                        postv('sdt')?:null, postv('email')?:null,
-                        postv('vitri')?:null, postv('trangthai','dang_lam'),
-                        postv('ngaynghi')?:null, $manv
-                    ]);
+               SET hoten=?, gt=?, ns=?, ngayvl=?, sdt=?, email=?, vitri=?, trangthai=?, ngaynghi=?, 
+                   max_hours_week=?
+               WHERE manv=?")
+    ->execute([
+        postv('hoten'), postv('gt','Nam'),
+        postv('ns')?:null, postv('ngayvl')?:null,
+        postv('sdt')?:null, postv('email')?:null,
+        postv('vitri')?:null, postv('trangthai','dang_lam'),
+        postv('ngaynghi')?:null,
+        (int)postv('max_hours_week',48),
+        $manv
+    ]);
 
-                if(($newCn=(int)postv('chinhanh_id'))>0){
-                    $s=$pdo->prepare("SELECT id,chinhanh_id FROM nv_chinhanh WHERE manv=? ORDER BY id DESC LIMIT 1");
-                    $s->execute([$manv]); $cur=$s->fetch();
-                    if(!$cur || (int)$cur['chinhanh_id']!==$newCn){
-                        if($cur){
-                            $pdo->prepare("UPDATE nv_chinhanh SET den_ngay=? WHERE id=?")
-                                ->execute([date('Y-m-d'),$cur['id']]);
-                        }
-                        $pdo->prepare("INSERT INTO nv_chinhanh(manv,chinhanh_id,tu_ngay) VALUES(?,?,?)")
-                            ->execute([$manv,$newCn,date('Y-m-d')]);
-                        $pdo->prepare("INSERT INTO nhanvien_biendong(manv,loai,tu_cn,den_cn,ghi_chu)
-                                       VALUES(?,?,?,?,?)")
-                            ->execute([$manv,'chuyen_cn',$cur['chinhanh_id']??null,$newCn,'Chuyển chi nhánh']);
-                    }
-                }
 
-                if(($max=postv('max_hours_week'))!==null){
-                    $pdo->prepare("INSERT INTO nv_quydinh(manv,max_hours_week) VALUES(?,?)
-                                   ON DUPLICATE KEY UPDATE max_hours_week=VALUES(max_hours_week)")
-                        ->execute([$manv,(int)$max]);
-                }
-                $notes[]="Đã cập nhật #$manv.";
+                // cập nhật CN trực tiếp trên nhanvien + nối lịch sử JSON + ghi biến động JSON
+$newCn = (int)postv('chinhanh_id', 0);
+
+// lấy hiện trạng
+$r = $pdo->prepare("SELECT chinhanh_id, lichsu_chinhanh, biendong FROM nhanvien WHERE manv=?");
+$r->execute([$manv]); $cur = $r->fetch() ?: ['chinhanh_id'=>null,'lichsu_chinhanh'=>null,'biendong'=>null];
+$oldCn = (int)($cur['chinhanh_id'] ?? 0);
+
+// nếu đổi CN thì đóng bản ghi cũ và mở bản ghi mới trong JSON lichsu_chinhanh
+if ($newCn !== $oldCn) {
+    $hist = json_decode($cur['lichsu_chinhanh'] ?? '[]', true);
+    if ($hist && !isset($hist[count($hist)-1]['den_ngay'])) {
+        $hist[count($hist)-1]['den_ngay'] = date('Y-m-d');
+    }
+    $hist[] = ['tu_ngay'=>date('Y-m-d'),'den_ngay'=>null,'chinhanh_id'=>$newCn];
+    $bd = json_decode($cur['biendong'] ?? '[]', true);
+    $bd[] = ['time'=>date('c'),'loai'=>'chuyen_cn','tu_cn'=>$oldCn,'den_cn'=>$newCn];
+
+    $pdo->prepare("UPDATE nhanvien SET chinhanh_id=?, lichsu_chinhanh=?, biendong=? WHERE manv=?")
+        ->execute([
+            $newCn ?: null,
+            json_encode($hist, JSON_UNESCAPED_UNICODE),
+            json_encode($bd, JSON_UNESCAPED_UNICODE),
+            $manv
+        ]);
+}
             }
 
             if($act==='soft_delete'){
                 $manv=(int)postv('manv');
-                $pdo->prepare("UPDATE nhanvien SET trangthai='da_nghi',ngaynghi=? WHERE manv=?")
-                    ->execute([date('Y-m-d'),$manv]);
-                $pdo->prepare("INSERT INTO nhanvien_biendong(manv,loai,ghi_chu) VALUES(?,?,?)")
-                    ->execute([$manv,'thoi_viec','Thôi việc']);
+                $pdo->prepare("UPDATE nhanvien SET trangthai='da_nghi', ngaynghi=? WHERE manv=?")
+    ->execute([date('Y-m-d'), $manv]);
+
+$r = $pdo->prepare("SELECT biendong FROM nhanvien WHERE manv=?");
+$r->execute([$manv]);
+$bd = json_decode(($r->fetch()['biendong'] ?? '[]'), true);
+$bd[] = ['time'=>date('c'),'loai'=>'thoi_viec','note'=>'Thôi việc'];
+$pdo->prepare("UPDATE nhanvien SET biendong=? WHERE manv=?")
+    ->execute([json_encode($bd, JSON_UNESCAPED_UNICODE), $manv]);
+
                 $notes[]="Đã đánh dấu nghỉ việc #$manv.";
             }
 
-            if($act==='add_shift'){
-                $manv=(int)postv('manv');
-                $maca=postv('maca'); $ngay=postv('ngay')?:date('Y-m-d');
-                $c=$pdo->prepare("SELECT id,start_time,end_time FROM ca_lam WHERE maca=?");
-                $c->execute([$maca]); $ca=$c->fetch();
-                if(!$ca) throw new RuntimeException('Mã ca không hợp lệ');
-                $start="$ngay {$ca['start_time']}"; $end="$ngay {$ca['end_time']}";
-                // chống trùng
-                $q=$pdo->prepare("SELECT COUNT(*) FROM nv_lich WHERE manv=? AND ngay=? AND NOT(end_dt<=? OR start_dt>=?)");
-                $q->execute([$manv,$ngay,$start,$end]);
-                if((int)$q->fetchColumn()>0) throw new RuntimeException('Trùng ca trong ngày');
-                $pdo->prepare("INSERT INTO nv_lich(manv,ngay,start_dt,end_dt,ca_id) VALUES(?,?,?,?,?)")
-                    ->execute([$manv,$ngay,$start,$end,$ca['id']]);
-                $notes[]="Đã phân ca $maca ngày $ngay cho #$manv.";
-            }
+            if ($act === 'add_shift') {
+    $manv  = (int)postv('manv');
+    $ngay  = postv('ngay') ?: date('Y-m-d');
+
+    // type="time" trả 'HH:MM' -> thêm ':00' cho DATETIME
+    $start = $ngay.' '.(postv('start_time') ? postv('start_time').':00' : '00:00:00');
+    $end   = $ngay.' '.(postv('end_time')   ? postv('end_time').':00'   : '00:00:00');
+    $maca  = postv('maca') ?: null;
+    $note  = postv('note') ?: null;
+
+    // kiểm tra giờ hợp lệ
+    if (strtotime($end) <= strtotime($start)) {
+        throw new RuntimeException('Giờ kết thúc phải lớn hơn giờ bắt đầu');
+    }
+
+    // chống trùng ca trong ngày
+    $q = $pdo->prepare(
+        "SELECT COUNT(*) 
+         FROM lichlamviec 
+         WHERE manv=? AND ngay=? 
+           AND NOT(end_dt<=? OR start_dt>=?)"
+    );
+    $q->execute([$manv, $ngay, $start, $end]);
+    if ((int)$q->fetchColumn() > 0) {
+        throw new RuntimeException('Trùng ca trong ngày');
+    }
+
+    // ghi lịch: cột đúng theo SQL của bạn: manv, ngay, start_dt, end_dt, ca_maca, note
+    $ins = $pdo->prepare(
+        "INSERT INTO lichlamviec(manv, ngay, start_dt, end_dt, ca_maca, note)
+         VALUES(?,?,?,?,?,?)"
+    );
+    $ins->execute([$manv, $ngay, $start, $end, $maca, $note]);
+
+    $notes[] = "Đã phân ca ".($maca ?: '')." ngày $ngay cho #$manv.";
+}
+
+
 
             if($act==='add_attendance'){
-                $pdo->prepare("INSERT INTO cham_cong(manv,check_in,check_out,source,note)
-                               VALUES(?,?,?,?,?)")
-                    ->execute([
-                        (int)postv('manv'),
-                        postv('check_in'),
-                        postv('check_out')?:null,
-                        'web', postv('note')?:null
-                    ]);
+                $manv = (int)postv('manv');
+$r = $pdo->prepare("SELECT biendong FROM nhanvien WHERE manv=?"); $r->execute([$manv]);
+$bd = json_decode(($r->fetch()['biendong'] ?? '[]'), true);
+$bd[] = ['time'=>date('c'),'loai'=>'cham_cong','check_in'=>postv('check_in'),'check_out'=>postv('check_out')?:null,'source'=>'web','note'=>postv('note')?:null];
+$pdo->prepare("UPDATE nhanvien SET biendong=? WHERE manv=?")
+    ->execute([json_encode($bd, JSON_UNESCAPED_UNICODE), $manv]);
+
                 $notes[]="Đã ghi chấm công.";
             }
 
@@ -176,60 +227,73 @@ $kpi['total']    =(int)$pdo->query("SELECT COUNT(*) FROM nhanvien")->fetchColumn
 $kpi['dang_lam'] =(int)$pdo->query("SELECT COUNT(*) FROM nhanvien WHERE trangthai='dang_lam'")->fetchColumn();
 $kpi['tam_nghi'] =(int)$pdo->query("SELECT COUNT(*) FROM nhanvien WHERE trangthai='tam_nghi'")->fetchColumn();
 $kpi['da_nghi']  =(int)$pdo->query("SELECT COUNT(*) FROM nhanvien WHERE trangthai='da_nghi'")->fetchColumn();
-try{ $kpi['violators']=(int)$pdo->query("SELECT COUNT(DISTINCT manv) FROM v_gio_tuan_vi_pham")->fetchColumn(); }
-catch(Throwable $e){ $kpi['violators']=0; }
+$kpi['violators']=0; // chưa dùng view tính giờ làm
+
 
 /* ========= Master data ========= */
 try{ $branches=$pdo->query("SELECT id,macn,tencn FROM chinhanh ORDER BY id")->fetchAll(); }
 catch(Throwable $e){ $branches=[]; }
-try{ $shifts=$pdo->query("SELECT maca,tenca FROM ca_lam ORDER BY id")->fetchAll(); }
-catch(Throwable $e){ $shifts=[]; }
+// nếu có bảng lichlamviec thì lấy danh sách mã ca đã dùng, không thì để rỗng
+try{ 
+  $shifts=$pdo->query(
+    "SELECT DISTINCT ca_maca AS maca, ca_maca AS tenca 
+     FROM lichlamviec 
+     WHERE ca_maca IS NOT NULL 
+     ORDER BY ca_maca"
+  )->fetchAll(); 
+} catch(Throwable $e){ $shifts=[]; }
+
 
 /* ========= WHERE ========= */
 $where=[]; $args=[];
 if($q!==''){ $where[]="(n.hoten LIKE ? OR n.email LIKE ? OR n.sdt LIKE ?)"; $args[]="%$q%";$args[]="%$q%";$args[]="%$q%"; }
 if(in_array($status,['dang_lam','tam_nghi','da_nghi'],true)){ $where[]="n.trangthai=?"; $args[]=$status; }
-if($cn_id>0){ $where[]="cn.chinhanh_id=?"; $args[]=$cn_id; }
+if($cn_id>0){ $where[]="n.chinhanh_id=?"; $args[]=$cn_id; }
 $whereSql=$where?('WHERE '.implode(' AND ',$where)):'';
 
 /* ========= Count ========= */
 $csql="SELECT COUNT(*) FROM nhanvien n
-       LEFT JOIN (
-         SELECT nc.manv,nc.chinhanh_id FROM nv_chinhanh nc
-         JOIN (SELECT manv,MAX(id) mid FROM nv_chinhanh GROUP BY manv) t ON t.mid=nc.id
-       ) cn ON cn.manv=n.manv
+       LEFT JOIN chinhanh ch ON ch.id=n.chinhanh_id
        $whereSql";
+
 $st=$pdo->prepare($csql); $st->execute($args); $totalRows=(int)$st->fetchColumn();
 $totalPages=max(1,(int)ceil($totalRows/$limit));
 
 /* ========= List ========= */
-$sql="SELECT n.manv,n.hoten,n.gt,n.ns,n.ngayvl,n.sdt,n.email,n.vitri,n.trangthai,
-             cn.chinhanh_id, ch.tencn,
-             k.so_don, k.doanh_thu, k.ty_le_upsell,
-             q.max_hours_week, ROUND(COALESCE(g.hours,0),2) hours_week,
-             CASE WHEN g.hours>q.max_hours_week THEN 1 ELSE 0 END over_week
-      FROM nhanvien n
-      LEFT JOIN (
-        SELECT nc.manv,nc.chinhanh_id,ch.tencn
-        FROM nv_chinhanh nc
-        JOIN (SELECT manv,MAX(id) mid FROM nv_chinhanh GROUP BY manv) t ON t.mid=nc.id
-        JOIN chinhanh ch ON ch.id=nc.chinhanh_id
-      ) cn ON cn.manv=n.manv
-      LEFT JOIN v_kpi_nv_30d k ON k.manv=n.manv
-      LEFT JOIN nv_quydinh q ON q.manv=n.manv
-      LEFT JOIN (
-        SELECT v1.manv,v1.hours FROM v_gio_tuan v1
-        JOIN (SELECT manv,MAX(yw) myw FROM v_gio_tuan GROUP BY manv) last
-             ON last.manv=v1.manv AND last.myw=v1.yw
-      ) g ON g.manv=n.manv
-      LEFT JOIN chinhanh ch ON ch.id=cn.chinhanh_id
-      $whereSql
-      ORDER BY n.manv DESC
-      LIMIT $limit OFFSET $offset";
-$st=$pdo->prepare($sql); $st->execute($args); $rows=$st->fetchAll();
+$sql = "SELECT 
+          n.manv, n.hoten, n.gt, n.ns, n.ngayvl, n.vitri, n.trangthai, 
+          n.sdt, n.email, n.chinhanh_id, ch.tencn, 
+          n.max_hours_week,
+          IFNULL(w.hours_week,0) AS hours_week,
+          CASE WHEN IFNULL(w.hours_week,0) > n.max_hours_week THEN 1 ELSE 0 END AS over_week,
+          (
+            SELECT COUNT(*)
+            FROM donhang d
+            WHERE d.manv = n.manv
+              AND d.ngaytao >= CURDATE() - INTERVAL 30 DAY
+          ) AS so_don,
+          0 AS doanh_thu,
+          0 AS ty_le_upsell
+        FROM nhanvien n
+        LEFT JOIN chinhanh ch ON ch.id = n.chinhanh_id
+        LEFT JOIN (
+           SELECT manv, SUM(TIMESTAMPDIFF(MINUTE, start_dt, end_dt))/60 AS hours_week
+           FROM lichlamviec
+           WHERE YEARWEEK(ngay,1) = YEARWEEK(CURDATE(),1)
+           GROUP BY manv
+        ) w ON w.manv = n.manv
+        $whereSql
+        ORDER BY n.manv DESC
+        LIMIT $limit OFFSET $offset";
+$st = $pdo->prepare($sql);
+$st->execute($args);
+$rows = $st->fetchAll();
+
 
 /* ========= Header ========= */
 $header = __DIR__.'/partials/header.php';
+
+
 include $header;
 ?>
 <main class="flex-1 p-6 overflow-y-auto bg-[url('/Pharmacy-management/static/dots.svg')] bg-cover">
@@ -356,12 +420,22 @@ include $header;
               <input type="hidden" name="manv" value="<?=$r['manv']?>">
               <div class="text-sm mb-2 font-semibold">Phân ca</div>
               <div class="flex gap-2">
-                <input type="date" name="ngay" value="<?=date('Y-m-d')?>" class="border rounded-lg px-2 py-1 text-sm">
-                <select name="maca" class="border rounded-lg px-2 py-1 text-sm">
-                  <?php foreach($shifts as $s): ?><option value="<?=$s['maca']?>"><?=$s['maca']?> - <?=$s['tenca']?></option><?php endforeach;?>
-                </select>
-                <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Gán</button>
-              </div>
+  <input type="date" name="ngay" value="<?=date('Y-m-d')?>" class="border rounded-lg px-2 py-1 text-sm" required>
+  <input type="time" name="start_time" class="border rounded-lg px-2 py-1 text-sm" required>
+  <input type="time" name="end_time" class="border rounded-lg px-2 py-1 text-sm" required>
+
+  <select name="maca" class="border rounded-lg px-2 py-1 text-sm">
+    <option value="">-- Mã ca --</option>
+    <?php foreach($shifts as $s): ?>
+      <option value="<?=h($s['maca'])?>"><?=h($s['maca'])?></option>
+    <?php endforeach;?>
+  </select>
+
+  <input name="note" placeholder="Ghi chú" class="border rounded-lg px-2 py-1 text-sm w-40">
+  <button class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">Gán</button>
+</div>
+
+
             </form>
 
             <form method="post" class="border rounded-xl p-3">
