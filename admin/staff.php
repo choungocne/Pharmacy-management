@@ -48,11 +48,27 @@ function money($n){return number_format((float)$n,0,',','.');}
 
 $active = 'staff';
 $errors=[]; $notes=[];
+// lấy flash từ lần redirect trước
+if (!empty($_SESSION['notes'])) { $notes = array_merge($notes, $_SESSION['notes']); unset($_SESSION['notes']); }
+if (!empty($_SESSION['errors'])) { $errors = array_merge($errors, $_SESSION['errors']); unset($_SESSION['errors']); }
+
+// PRG helper
+function flash_redirect(string $msg, bool $is_error=false): void {
+    if ($is_error) {
+        $_SESSION['errors'] = $_SESSION['errors'] ?? [];
+        $_SESSION['errors'][] = $msg;
+    } else {
+        $_SESSION['notes'] = $_SESSION['notes'] ?? [];
+        $_SESSION['notes'][] = $msg;
+    }
+    header('Location: '.$_SERVER['REQUEST_URI']);
+    exit;
+}
 
 /* ========= POST actions ========= */
 if ($_SERVER['REQUEST_METHOD']==='POST') {
     if (!has_perm($pdo,'hr.write')) {
-        $errors[]='Bạn không có quyền thao tác nhân sự.';
+        flash_redirect('Bạn không có quyền thao tác nhân sự.', true);
     } else {
         $act=postv('action','');
         try{
@@ -96,7 +112,9 @@ if ($cn > 0) {
 
                 }catch(Throwable $x){}
                 $pdo->commit();
-                $notes[]="Đã thêm nhân viên #$manv.";
+flash_redirect("Đã thêm nhân viên #$manv.");
+
+
             }
 
             if($act==='update_staff'){
@@ -142,7 +160,8 @@ if ($newCn !== $oldCn) {
             $manv
         ]);
 }
-            }
+   flash_redirect("Đã cập nhật nhân viên #$manv.");         
+}
 
             if($act==='soft_delete'){
                 $manv=(int)postv('manv');
@@ -156,7 +175,7 @@ $bd[] = ['time'=>date('c'),'loai'=>'thoi_viec','note'=>'Thôi việc'];
 $pdo->prepare("UPDATE nhanvien SET biendong=? WHERE manv=?")
     ->execute([json_encode($bd, JSON_UNESCAPED_UNICODE), $manv]);
 
-                $notes[]="Đã đánh dấu nghỉ việc #$manv.";
+                flash_redirect("Đã đánh dấu nghỉ việc #$manv.");
             }
 
             if ($act === 'add_shift') {
@@ -193,7 +212,8 @@ $pdo->prepare("UPDATE nhanvien SET biendong=? WHERE manv=?")
     );
     $ins->execute([$manv, $ngay, $start, $end, $maca, $note]);
 
-    $notes[] = "Đã phân ca ".($maca ?: '')." ngày $ngay cho #$manv.";
+    flash_redirect("Đã phân ca ".($maca ?: '')." ngày $ngay cho #$manv.");
+
 }
 
 
@@ -206,7 +226,8 @@ $bd[] = ['time'=>date('c'),'loai'=>'cham_cong','check_in'=>postv('check_in'),'ch
 $pdo->prepare("UPDATE nhanvien SET biendong=? WHERE manv=?")
     ->execute([json_encode($bd, JSON_UNESCAPED_UNICODE), $manv]);
 
-                $notes[]="Đã ghi chấm công.";
+                flash_redirect("Đã ghi chấm công cho #$manv.");
+
             }
 
         }catch(Throwable $e){ $errors[]=$e->getMessage(); if($pdo->inTransaction()) $pdo->rollBack(); }
