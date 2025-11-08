@@ -27,9 +27,27 @@ function enrich_with_money(&$rows, PDO $pdo): void {
   $price = [];
   if ($ids) {
     $in = implode(',', array_map('intval', array_keys($ids)));
-    $sql = "SELECT masp, IF(giagiam>0, giagiam, giaban) gia FROM sanpham WHERE masp IN ($in)";
-    foreach ($pdo->query($sql) as $p) $price[(int)$p['masp']] = (float)$p['gia'];
-  }
+    $sql = "SELECT sp.masp,
+                   CASE
+                     WHEN km.makm IS NOT NULL
+                          AND NOW() BETWEEN km.ngay_batdau AND km.ngay_ketthuc
+                          AND km.trangthai_deal IN ('sap_dien_ra','dang_dien_ra')
+                     THEN GREATEST(
+                            0,
+                            sp.giaban
+                            - COALESCE(km.gia_giam_co_dinh, 0)
+                            - ROUND(sp.giaban * COALESCE(km.phantram_giam, 0) / 100, 0)
+                          )
+                     ELSE sp.giaban
+                   END AS gia
+            FROM sanpham sp
+            LEFT JOIN khuyenmai km ON km.makm = sp.makm
+            WHERE sp.masp IN ($in)";
+    foreach ($pdo->query($sql) as $p) {
+        $price[(int)$p['masp']] = (float)$p['gia'];
+    }
+}
+
   foreach ($rows as &$r) {
     $items = json_decode($r['chitiet'] ?? '[]', true) ?: [];
     $qty = 0; $tien = 0;

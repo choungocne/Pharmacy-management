@@ -19,6 +19,18 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
 }
 
 date_default_timezone_set('Asia/Ho_Chi_Minh');
+// ===== helper: kiểm tra cột có tồn tại trong DB hiện tại hay không
+if (!function_exists('col_exists')) {
+  function col_exists(PDO $pdo, string $table, string $col): bool {
+    $st = $pdo->prepare(
+      "SELECT COUNT(*) FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?"
+    );
+    $st->execute([$table, $col]);
+    return (int)$st->fetchColumn() > 0;
+  }
+}
+
 // ===== Helpers: tính tiền đơn từ JSON chitiet =====
 function enrich_with_money(&$rows, PDO $pdo): void {
   $ids = [];
@@ -29,7 +41,9 @@ function enrich_with_money(&$rows, PDO $pdo): void {
   $price = [];
   if ($ids) {
     $in = implode(',', array_map('intval', array_keys($ids)));
-    $sql = "SELECT masp, IF(giagiam>0, giagiam, giaban) gia FROM sanpham WHERE masp IN ($in)";
+    $col = col_exists($pdo, 'sanpham', 'giagiam') ? 'giagiam' : '0';
+$sql = "SELECT masp, IF($col>0, $col, giaban) gia FROM sanpham WHERE masp IN ($in)";
+
     foreach ($pdo->query($sql) as $p) $price[(int)$p['masp']] = (float)$p['gia'];
   }
   foreach ($rows as &$r) {
@@ -46,7 +60,9 @@ function enrich_with_money(&$rows, PDO $pdo): void {
 }
 
 function sum_phai_thu(PDO $pdo, string $whereSql, array $params = []): float {
-  $stmt = $pdo->prepare("SELECT chitiet, giagiam FROM donhang WHERE $whereSql");
+  $col = col_exists($pdo, 'donhang', 'giagiam') ? 'giagiam' : '0';
+$stmt = $pdo->prepare("SELECT chitiet, $col AS giagiam FROM donhang WHERE $whereSql");
+
   $stmt->execute($params);
   $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
   enrich_with_money($rows, $pdo);
@@ -89,12 +105,14 @@ $kpi['total_products'] = (int)$pdo->query(
 
 
 // ===== Doanh thu 7 ngày =====
+$col_giam_dh = col_exists($pdo, 'donhang', 'giagiam') ? 'giagiam' : '0';
 $orders7 = $pdo->query(
-  "SELECT DATE(ngaytao) AS d, chitiet, giagiam
+  "SELECT DATE(ngaytao) AS d, chitiet, $col_giam_dh AS giagiam
    FROM donhang
    WHERE trangthai IN ('da_thanh_toan','da_giao')
      AND ngaytao >= CURDATE() - INTERVAL 6 DAY"
 )->fetchAll(PDO::FETCH_ASSOC);
+
 
 enrich_with_money($orders7, $pdo);
 
@@ -197,7 +215,7 @@ include __DIR__ . '/partials/header.php';
               <div class="w-2/3">
                 <div class="font-medium text-slate-800 line-clamp-1"><?= htmlspecialchars($e['tensp']) ?></div>
                 <div class="text-xs text-slate-500 mt-0.5">
-                  Lô: <b><?= htmlspecialchars($e['solo']) ?></b> • HSD: <?= date('d/m/Y', strtotime($e['hsd'])) ?> • SL: <?= (int)$e['sl'] ?>
+                  Lô: <b><?= htmlspecialchars($e['solo']) ?></b> • HSD: <?= date('d/m/Y', strtotime($e['hsd'])) ?> • SL: <?= (int)($e['soluong'] ?? 0) ?>
                 </div>
               </div>
               <span class="text-xs px-2.5 py-1 rounded-full
