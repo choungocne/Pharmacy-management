@@ -344,15 +344,19 @@ if (!empty($product_mamv_ids)) {
                     <?php else: ?>
                         <?php foreach ($products as $product): ?>
 
-                            <a href="Pharmacy-management/base.php?page=detailsproducts&masp=<?= urlencode($sp['masp']) ?>" class="product-card">
+                            <a href="Pharmacy-management/base.php?page=detailsproducts&masp=<?= urlencode($product['masp']) ?>" class="product-card">
                                 <?php 
-                                $discount_percent = 0;
-                                $final_price = $product['giaban'];
-                                if ($product['giagiam'] > 0 && $product['giaban'] > 0) {
-                                    $final_price = $product['giaban'] - $product['giagiam'];
-                                    $discount_percent = round(($product['giagiam'] / $product['giaban']) * 100);
-                                }
-                                ?>
+$discount_percent = 0;
+$giaban   = (float)($product['giaban'] ?? 0);
+$giagiam  = (float)($product['giagiam'] ?? 0); // có thể không tồn tại cột, mặc định 0
+$final_price = $giaban;
+
+if ($giagiam > 0 && $giaban > 0) {
+    $final_price = max(0, $giaban - $giagiam);
+    $discount_percent = (int)round(($giagiam / $giaban) * 100);
+}
+?>
+
                                 <?php if ($discount_percent > 0): ?>
                                     <span class="discount-badge">-<?= $discount_percent ?>%</span>
                                 <?php endif; ?>
