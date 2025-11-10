@@ -253,6 +253,7 @@ function build_url($q,$dm,$page,$per){
                 <?php else: ?>
                   <span class="text-blue-600 font-bold"><?=number_format($price)?>đ</span>
                 
+                <?php endif; ?>
                 <?php if($r['ton']!==null): ?>
                   <span class="ml-2 text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">Tồn: <?= (int)$r['ton']?></span>
                 <?php endif; ?>
