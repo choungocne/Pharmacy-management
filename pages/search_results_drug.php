@@ -4,9 +4,23 @@
 // CHỨC NĂNG: Hiển thị kết quả tìm kiếm SẢN PHẨM THUỐC
 // =================================================================
 
-// Đảm bảo hàm pdo() và money_vn() có sẵn
-require_once 'db.php'; 
+// ... (Các hàm và require_once 'db.php'; giữ nguyên) ...
+if (!function_exists('calculate_sale_price')) {
+    function calculate_sale_price($giaban, $phantram_giam, $gia_giam_co_dinh) {
+        $sale_price = $giaban;
+        
+        // Tính giảm giá theo phần trăm
+        if ($phantram_giam > 0) {
+            $sale_price = $giaban * (1 - $phantram_giam / 100);
+        }
+        
+        // Lưu ý: Giữ logic đơn giản, gia_giam_co_dinh thường áp dụng cho đơn hàng
+        // Nếu muốn áp dụng giảm cố định cho sản phẩm, bạn có thể thêm:
+        // if ($gia_giam_co_dinh > 0) { $sale_price = $giaban - $gia_giam_co_dinh; }
 
+        return max(0, $sale_price); // Đảm bảo giá không âm
+    }
+}
 // 1. Lấy từ khóa tìm kiếm
 $search_query = $_GET['q'] ?? '';
 $search_query = trim($search_query);
@@ -14,17 +28,18 @@ $search_query = trim($search_query);
 // 2. Chuẩn bị truy vấn CSDL
 $products = [];
 if (!empty($search_query)) {
-    // Chỉ tìm kiếm các sản phẩm thuộc danh mục cấp 1 là 'Thuốc' (madm=2) 
-    // HOẶC 'Thực phẩm chức năng' (madm=1).
-    // Ta dùng IN để lấy madm của các sản phẩm thuộc TPCN (1) hoặc Thuốc (2).
-    
-    $sql = "SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam, sp.hinhsp, sp.congdung, sp.requires_rx, dm.tendm
-            FROM sanpham sp
-            JOIN danhmuc dm ON sp.madm = dm.madm
-            WHERE sp.tensp LIKE :query 
-            AND dm.parent_id IN (1, 2) -- Lọc theo TPCN (madm=1) và Thuốc (madm=2)
-            AND sp.trangthai = 1 
-            LIMIT 20";
+    // Sửa lỗi: Bỏ điều kiện lọc theo ID (madm) để hiển thị tất cả sản phẩm
+    $sql = "
+        SELECT 
+            sp.masp, sp.tensp, sp.giaban, sp.hinhsp, sp.congdung, sp.requires_rx, dm.tendm,
+            km.phantram_giam, km.gia_giam_co_dinh
+        FROM sanpham sp
+        JOIN danhmuc dm ON sp.madm = dm.madm
+        LEFT JOIN khuyenmai km ON sp.makm = km.makm
+        WHERE sp.tensp LIKE :query 
+          AND sp.trangthai = 1 -- Giữ lại điều kiện sản phẩm đang hoạt động
+        LIMIT 20
+    ";
 
     try {
         $pdo = pdo(); // Lấy kết nối PDO
@@ -35,7 +50,7 @@ if (!empty($search_query)) {
         $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
         // Ghi log lỗi
-        // error_log("Lỗi truy vấn tìm kiếm thuốc: " . $e->getMessage());
+        // error_log("Lỗi truy vấn tìm kiếm: " . $e->getMessage());
     }
 }
 ?>
@@ -52,24 +67,26 @@ if (!empty($search_query)) {
 
         <?php if (!empty($products)): ?>
             <div class="product-list">
-                <?php foreach ($products as $product): ?>
+               <?php foreach ($products as $product): ?>
                     <?php
-                        // Tính giá hiển thị
-                        $display_price = $product['giaban'];
-                        $discount_percent = 0;
-                        if ($product['giagiam'] > 0 && $product['giagiam'] < $product['giaban']) {
-                            $display_price = $product['giagiam'];
-                            $discount_percent = round((($product['giaban'] - $product['giagiam']) / $product['giaban']) * 100);
-                        }
+                        // Sửa lỗi: Tính giá dựa trên khuyến mãi (makm)
+                        $original_price = $product['giaban'];
+                        $sale_price = calculate_sale_price(
+                            $product['giaban'], 
+                            $product['phantram_giam'], 
+                            $product['gia_giam_co_dinh']
+                        );
+                        
+                        $has_discount = $sale_price < $original_price;
+                        $discount_percent = $has_discount ? round((($original_price - $sale_price) / $original_price) * 100) : 0;
+                        
                         $product_image = $product['hinhsp'] ?? 'default.png';
-                        // Định dạng lại URL ảnh vì ảnh trong schema là /static/img/product/
-                        $img_url = (strpos($product_image, 'static/img') !== false) 
-                                   ? $base_url . $product_image 
-                                   : $base_url . '/static/img/product/' . $product_image;
+                        // Định dạng lại URL ảnh
+                        $img_url = $product_image;
                     ?>
                     <div class="product-item">
                         <div class="product-image">
-                            <?php if ($discount_percent > 0): ?>
+                            <?php if ($has_discount): ?>
                                 <span class="discount-badge">-<?= $discount_percent ?>%</span>
                             <?php endif; ?>
                             <a href="<?= $base_url ?>/base.php?page=product_detail&masp=<?= $product['masp'] ?>">
@@ -88,12 +105,12 @@ if (!empty($search_query)) {
                             </h3>
                             <p class="product-category"><?= htmlspecialchars($product['tendm']) ?></p>
                             <div class="product-price">
-                                <span class="current-price"><?= money_vn($display_price) ?>đ</span>
-                                <?php if ($product['giagiam'] > 0 && $product['giagiam'] < $product['giaban']): ?>
-                                    <span class="old-price"><?= money_vn($product['giaban']) ?>đ</span>
+                                <span class="current-price"><?= money_vn($sale_price) ?>đ</span>
+                                <?php if ($has_discount): ?>
+                                    <span class="old-price"><?= money_vn($original_price) ?>đ</span>
                                 <?php endif; ?>
                             </div>
-                            <button class="add-to-cart-btn"><i class="fas fa-shopping-cart"></i> Thêm vào giỏ</button>
+                            <button class="add-to-cart-btn"><i class="fas fa-shopping-cart"></i> Chọn mua</button>
                         </div>
                     </div>
                 <?php endforeach; ?>
