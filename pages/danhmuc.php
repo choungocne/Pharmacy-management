@@ -1,10 +1,9 @@
 <?php
 // File: pages/danhmuc.php
-// PHIÊN BẢN AJAX FILTER
+// PHIÊN BẢN AJAX FILTER + CART
 
 // 1. KẾT NỐI CSDL VÀ CÁC HÀM HỖ TRỢ
-// ===================================
-include_once __DIR__ . '/../db.php'; // Sử dụng file kết nối chung
+include_once __DIR__ . '/../db.php';
 if (!function_exists('pdo')) {
     function pdo() {
         return new PDO(
@@ -24,7 +23,6 @@ $base_url = '/Pharmacy-management';
 $madm_cap2 = $_GET['madm'] ?? 0;
 
 // 2. LẤY THÔNG TIN DANH MỤC CẤP 2 HIỆN TẠI
-// ===================================
 $stmt_dm2 = $pdo->prepare("SELECT * FROM danhmuc WHERE madm = ? AND cap = 2");
 $stmt_dm2->execute([$madm_cap2]);
 $dm2 = $stmt_dm2->fetch(PDO::FETCH_ASSOC);
@@ -35,15 +33,13 @@ if (!$dm2) {
 }
 
 // 3. LẤY DANH MỤC CẤP 3
-// =======================================================
 $stmt_lv3 = $pdo->prepare("SELECT * FROM danhmuc WHERE parent_id = ? AND cap = 3 ORDER BY tendm");
 $stmt_lv3->execute([$madm_cap2]);
 $sub_categories_lvl3 = $stmt_lv3->fetchAll(PDO::FETCH_ASSOC);
 $madm_cap3_list = array_column($sub_categories_lvl3, 'madm');
 
 // 4. LẤY SỐ LƯỢNG SẢN PHẨM CHO MỖI DANH MỤC CẤP 3
-// =======================================================
-$product_counts = []; // Khởi tạo mảng
+$product_counts = [];
 if (!empty($madm_cap3_list)) {
     $placeholders_count = implode(',', array_fill(0, count($madm_cap3_list), '?'));
     $sql_count = "SELECT madm, COUNT(*) as product_count FROM sanpham WHERE madm IN ($placeholders_count) GROUP BY madm";
@@ -53,21 +49,26 @@ if (!empty($madm_cap3_list)) {
 }
 
 // 5. LẤY TẤT CẢ SẢN PHẨM (CHỈ LẤY LẦN ĐẦU)
-// =======================================================
-$products = []; // Luôn khởi tạo là mảng rỗng
+$products = [];
 if (!empty($madm_cap3_list)) {
     $placeholders_prod = implode(',', array_fill(0, count($madm_cap3_list), '?'));
-    $sql_prod = "SELECT * FROM sanpham WHERE madm IN ($placeholders_prod)";
+    $sql_prod = "
+        SELECT sp.*, 
+               km.makm, km.phantram_giam, km.gia_giam_co_dinh, km.trangthai_deal
+        FROM sanpham sp
+        LEFT JOIN khuyenmai km ON sp.makm = km.makm 
+            AND km.trangthai_deal = 'dang_dien_ra'
+            AND km.ngay_batdau <= NOW() 
+            AND km.ngay_ketthuc >= NOW()
+        WHERE sp.madm IN ($placeholders_prod) AND sp.trangthai = 1
+    ";
     $stmt_prod = $pdo->prepare($sql_prod);
     $stmt_prod->execute($madm_cap3_list);
     $products = $stmt_prod->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // 6. TẠO BỘ LỌC ĐỘNG
-// =======================================================
-
-// --- LỌC THƯƠNG HIỆU ---
-$brands = []; // Khởi tạo mảng
+$brands = [];
 $product_math_ids = array_values(array_unique(array_filter(array_column($products, 'math'))));
 if (!empty($product_math_ids)) {
     $placeholders_brand = implode(',', array_fill(0, count($product_math_ids), '?'));
@@ -77,8 +78,7 @@ if (!empty($product_math_ids)) {
     $brands = $stmt_brand->fetchAll(PDO::FETCH_ASSOC);
 }
 
-// --- LỌC ĐỐI TƯỢNG (từ cột JSON) ---
-$doituong_list = []; // Khởi tạo mảng
+$doituong_list = [];
 foreach ($products as $product) {
     if (!empty($product['doituong'])) {
         $doituong_data = json_decode($product['doituong'], true);
@@ -90,18 +90,15 @@ foreach ($products as $product) {
 $doituong_list = array_unique(array_filter($doituong_list));
 sort($doituong_list);
 
-// --- LỌC MÙI VỊ (từ bảng muivi) ---
-$muivi_list = []; // Khởi tạo mảng
+$muivi_list = [];
 $product_mamv_ids = array_values(array_unique(array_filter(array_column($products, 'mamv'))));
 if (!empty($product_mamv_ids)) {
-    // *** SỬA ĐỔI: Lấy cả ID (mamv) và TÊN (tenmv) ***
     $placeholders_mv = implode(',', array_fill(0, count($product_mamv_ids), '?'));
     $sql_mv = "SELECT mamv, tenmv FROM muivi WHERE mamv IN ($placeholders_mv) ORDER BY tenmv";
     $stmt_mv = $pdo->prepare($sql_mv);
     $stmt_mv->execute($product_mamv_ids);
-    $muivi_list = $stmt_mv->fetchAll(PDO::FETCH_ASSOC); // <<< Sửa từ FETCH_COLUMN
+    $muivi_list = $stmt_mv->fetchAll(PDO::FETCH_ASSOC);
 }
-
 ?>
 
 <style>
@@ -231,7 +228,7 @@ if (!empty($product_mamv_ids)) {
         margin: 0;
     }
 
-    /* --- CỘT SẢN PHẨM (BÊN PHẢI) --- */
+    /* --- CỘT SẢN PHẨM (BÊNE PHẢI) --- */
     .product-header {
         display: flex;
         justify-content: space-between;
@@ -254,7 +251,7 @@ if (!empty($product_mamv_ids)) {
     }
     
 </style>
-   <link rel="stylesheet" href="static/css/product.css">
+<link rel="stylesheet" href="static/css/product.css">
 
 <div class="container">
 
@@ -343,34 +340,56 @@ if (!empty($product_mamv_ids)) {
                         <p>Chưa có sản phẩm nào trong danh mục này.</p>
                     <?php else: ?>
                         <?php foreach ($products as $product): ?>
+                            <?php 
+                            $giaban = (float)($product['giaban'] ?? 0);
+                            $final_price = $giaban;
+                            $discount_percent = 0;
+                            $imagePath = trim($product['hinhsp'] ?? '');
+                            if ($imagePath === '') {
+                                $imageSrc = $base_url . '/static/img/placeholder.jpg';
+                            } elseif (preg_match('#^https?://#i', $imagePath)) {
+                                $imageSrc = $imagePath;
+                            } else {
+                                $normalized = '/' . ltrim($imagePath, '/');
+                                $normalized = preg_replace('#^(/Pharmacy-management)+/#', '/Pharmacy-management/', $normalized);
+                                if (strpos($normalized, '/Pharmacy-management/') === 0) {
+                                    $imageSrc = $normalized;
+                                } else {
+                                    $imageSrc = rtrim($base_url, '/') . $normalized;
+                                }
+                            }
+                            
+                            // Tính giá sau khuyến mãi
+                            if ($product['makm']) {
+                                if ($product['phantram_giam'] > 0) {
+                                    $final_price = $giaban * (1 - $product['phantram_giam'] / 100);
+                                    $discount_percent = (int)$product['phantram_giam'];
+                                } else if ($product['gia_giam_co_dinh'] > 0) {
+                                    $final_price = max(0, $giaban - $product['gia_giam_co_dinh']);
+                                    $discount_percent = (int)round(($product['gia_giam_co_dinh'] / $giaban) * 100);
+                                }
+                            }
+                            ?>
 
-                            <a href="Pharmacy-management/base.php?page=detailsproducts&masp=<?= urlencode($product['masp']) ?>" class="product-card">
-                                <?php 
-$discount_percent = 0;
-$giaban   = (float)($product['giaban'] ?? 0);
-$giagiam  = (float)($product['giagiam'] ?? 0); // có thể không tồn tại cột, mặc định 0
-$final_price = $giaban;
-
-if ($giagiam > 0 && $giaban > 0) {
-    $final_price = max(0, $giaban - $giagiam);
-    $discount_percent = (int)round(($giagiam / $giaban) * 100);
-}
-?>
-
-                                <?php if ($discount_percent > 0): ?>
-                                    <span class="discount-badge">-<?= $discount_percent ?>%</span>
-                                <?php endif; ?>
-
-                                <img src="<?= htmlspecialchars($product['hinhsp'] ?? '/static/img/placeholder.jpg') ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
-                                <h3><?= htmlspecialchars($product['tensp']) ?></h3>
-                                <p class="price">
-                                    <?= money_vn($final_price) ?> đ
+                            <div class="product-card" data-masp="<?= $product['masp'] ?>">
+                                <a href="<?= $base_url ?>/base.php?page=detailsproducts&masp=<?= urlencode($product['masp']) ?>">
                                     <?php if ($discount_percent > 0): ?>
-                                        <span class="old-price"><?= money_vn($product['giaban']) ?>đ</span>
+                                        <span class="discount-badge">-<?= $discount_percent ?>%</span>
                                     <?php endif; ?>
-                                </p>
-                                <button class="btn-buy">Chọn mua</button>
-                            </a>
+
+                                    <img src="<?= htmlspecialchars($imageSrc) ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
+                                    <h3><?= htmlspecialchars($product['tensp']) ?></h3>
+                                    <p class="price">
+                                        <?= money_vn($final_price) ?> đ
+                                        <?php if ($discount_percent > 0): ?>
+                                            <span class="old-price"><?= money_vn($giaban) ?>đ</span>
+                                        <?php endif; ?>
+                                    </p>
+                                </a>
+                                <button class="btn-buy" onclick="addToCart(<?= $product['masp'] ?>, event)">
+                                    <i class="fas fa-cart-plus"></i> Chọn mua
+                                </button>
+                            </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
@@ -380,62 +399,82 @@ if ($giagiam > 0 && $giaban > 0) {
 </div>
 
 <script>
+    // Hàm thêm vào giỏ hàng
+    function addToCart(masp, event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const formData = new FormData();
+        formData.append('action', 'add');
+        formData.append('product_id', masp);
+        formData.append('quantity', 1);
+        
+        fetch('<?= $base_url ?>/cart_handler.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Hiển thị thông báo thành công
+                alert(data.message || 'Đã thêm vào giỏ hàng!');
+                // Reload trang để cập nhật số lượng giỏ hàng
+                location.reload();
+            } else {
+                alert(data.message || 'Có lỗi xảy ra!');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Có lỗi xảy ra khi thêm vào giỏ hàng!');
+        });
+    }
+
+    // Lắng nghe sự kiện lọc sản phẩm
     document.addEventListener('DOMContentLoaded', function() {
         const filterPanel = document.getElementById('filter-panel');
         const productGrid = document.getElementById('product-grid');
         const productCountNote = document.getElementById('product-count-note');
 
-        // Lắng nghe sự kiện 'change' trên toàn bộ panel lọc
         filterPanel.addEventListener('change', function(event) {
-            // Chỉ chạy khi người dùng thay đổi input (checkbox, radio)
             if (event.target.tagName === 'INPUT') {
                 applyFilters();
             }
         });
 
         function applyFilters() {
-            // Thêm class 'loading' để làm mờ grid
             productGrid.classList.add('loading');
 
             const formData = new FormData();
-
-            // 1. Lấy danh sách ID danh mục cấp 3
             const categoryIds = productGrid.dataset.categoryIds;
             formData.append('category_ids', categoryIds);
 
-            // 2. Lấy giá trị giá
             const priceRange = document.querySelector('input[name="price_range"]:checked');
             if (priceRange) {
                 formData.append('price_range', priceRange.value);
             }
 
-            // 3. Lấy các thương hiệu đã chọn
             const checkedBrands = document.querySelectorAll('input[name="brand[]"]:checked');
             checkedBrands.forEach(checkbox => {
                 formData.append('brand[]', checkbox.value);
             });
 
-            // 4. Lấy các đối tượng đã chọn
             const checkedDoituong = document.querySelectorAll('input[name="doituong[]"]:checked');
             checkedDoituong.forEach(checkbox => {
                 formData.append('doituong[]', checkbox.value);
             });
 
-            // 5. Lấy các mùi vị đã chọn
             const checkedMuivi = document.querySelectorAll('input[name="muivi[]"]:checked');
             checkedMuivi.forEach(checkbox => {
                 formData.append('muivi[]', checkbox.value);
             });
 
-            // 6. Gửi yêu cầu AJAX
-            // Sửa đường dẫn 'pages/filter_products.php' cho đúng với cấu trúc của bạn
             fetch('pages/filter_products.php', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
-                // 7. Cập nhật lại giao diện
                 productGrid.innerHTML = data.html;
                 productCountNote.innerHTML = `Tìm thấy ${data.count} sản phẩm.`;
                 productGrid.classList.remove('loading');
