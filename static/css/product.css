@@ -199,3 +199,80 @@ body {
     width: 100%;
   }
 }
+/* ===== NÚT CHỌN MUA ===== */
+.product-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-card .btn-buy {
+    width: 100%;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #004aad 0%, #0066cc 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.product-card .btn-buy:hover {
+    background: linear-gradient(135deg, #003580 0%, #004aad 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 74, 173, 0.3);
+}
+
+.product-card .btn-buy:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 74, 173, 0.2);
+}
+
+.product-card .btn-buy i {
+    font-size: 16px;
+}
+
+/* Hiệu ứng loading khi thêm vào giỏ */
+.product-card .btn-buy.loading {
+    background: #cccccc;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.product-card .btn-buy.loading::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffffff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    margin-left: 8px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .product-card .btn-buy {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+}
+
+/* Old price styling */
+.old-price {
+    text-decoration: line-through;
+    color: #999;
+    font-size: 0.85em;
+    margin-left: 8px;
+}
