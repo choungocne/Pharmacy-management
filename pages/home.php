@@ -44,6 +44,7 @@ $brand_discounts = [
     // Thêm các thương hiệu khác nếu có
 ];
 // --- 1. Lấy Sản phẩm đang có Deal (Sản phẩm có makm hợp lệ) ---
+// Cập nhật truy vấn Deal: Ưu tiên deal giảm giá cao và deal có giới hạn số lượng
 $sql_deal = "
     SELECT 
         sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm, km.phantram_giam, km.gia_giam_co_dinh
@@ -51,6 +52,10 @@ $sql_deal = "
     JOIN danhmuc dm ON sp.madm = dm.madm
     JOIN khuyenmai km ON sp.makm = km.makm
     WHERE km.trangthai_deal = 'dang_dien_ra'
+    ORDER BY 
+        km.phantram_giam DESC, -- Deal giảm % cao hơn hiển thị trước
+        km.soluong_deal_conlai ASC, -- Deal sắp hết hàng hiển thị trước
+        sp.masp ASC
     LIMIT 4
 ";
 $deals = pdo()->query($sql_deal)->fetchAll();
@@ -304,11 +309,11 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
             <div class="content">
                 <!-- Best Selling Products -->
               <section class="section">
-    <div class="section-header">
-        <h2>Sản phẩm bán chạy nhất</h2>
-        <a href="#" class="view-all">Xem tất cả <i class="fas fa-chevron-right"></i></a>
+   <section class="section product-carousel-container" style="background-color: #f5f5f5; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+    <div class="section-header" style="justify-content: center; text-align: center;">
+        <h2 style="background-color: #e74c3c; color: white; padding: 5px 20px; border-radius: 20px; display: inline-block;">Sản phẩm bán chạy</h2>
     </div>
-    <div class="product-grid">
+    <div class="product-grid" style="display: flex; overflow-x: auto; gap: 15px; padding-bottom: 10px;">
         <?php foreach ($products_banchay as $product): ?>
         <?php 
             // Tính toán giá sale nếu có (Sản phẩm bán chạy vẫn có thể đang sale)
@@ -317,26 +322,26 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
             $discount_percent = $has_discount ? round((($product['giaban'] - $sale_price) / $product['giaban']) * 100) : 0;
             $image_path = $product['hinhsp'] ? $product['hinhsp'] : 'static/img/placeholder.jpg';
         ?>
-        <div class="product-card">
-            <div class="product-image">
-                <img src="<?= $image_path ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
+        <div class="product-card" style="min-width: 200px; max-width: 250px; border: 1px solid #dcdcdc; border-radius: 8px; background-color: #fff; padding: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center;">
+            <?php if ($has_discount): ?>
+                <span class="discount-badge" style="position: absolute; top: 0; left: 0; background-color: #e74c3c; color: white; padding: 2px 8px; border-radius: 8px 0 8px 0; font-size: 14px;">-<?= $discount_percent ?>%</span>
+            <?php endif; ?>
+            <div class="product-image" style="margin-bottom: 10px;">
+                <img src="<?= $image_path ?>" alt="<?= htmlspecialchars($product['tensp']) ?>" style="width: 100%; height: auto; border-radius: 5px;">
             </div>
-            <div class="product-info">
-                <div class="product-category"><?= htmlspecialchars($product['tendm']) ?></div>
-                <div class="product-name"><?= htmlspecialchars($product['tensp']) ?></div>
-                <div class="product-price">
-                    <span class="current-price"><?= money_vn($sale_price) ?>đ</span>
+            <div class="product-info" style="min-height: 150px; display: flex; flex-direction: column; justify-content: space-between;">
+                <div class="product-name" style="font-weight: 600; font-size: 14px; margin-bottom: 5px; color: #2c3e50; height: 40px; overflow: hidden;"><?= htmlspecialchars($product['tensp']) ?></div>
+                <div class="product-price" style="margin-bottom: 10px;">
+                    <span class="current-price" style="display: block; font-size: 16px; font-weight: bold; color: #e74c3c;"><?= money_vn($sale_price) ?>đ</span>
                     <?php if ($has_discount): ?>
-                        <span class="original-price"><?= money_vn($product['giaban']) ?>đ</span>
-                        <span class="discount-badge">-<?= $discount_percent ?>%</span>
+                        <span class="original-price" style="display: block; font-size: 12px; color: #95a5a6; text-decoration: line-through;"><?= money_vn($product['giaban']) ?>đ</span>
                     <?php endif; ?>
+                    <span class="product-package-info" style="display: block; font-size: 12px; color: #7f8c8d; margin-top: 5px;">Hộp 60 Viên</span> 
                 </div>
-                <div class="product-package">Chi tiết sản phẩm</div>
                 <div class="product-actions">
-                    <button class="add-to-cart" data-product-id="<?= $product['masp'] ?>">
-                        Thêm giỏ hàng
+                    <button class="add-to-cart" data-product-id="<?= $product['masp'] ?>" style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: 600;">
+                        Chọn mua
                     </button>
-                    <button class="view-details">Chi tiết</button>
                 </div>
             </div>
         </div>
@@ -346,6 +351,7 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
         <p>Không tìm thấy sản phẩm bán chạy trong 30 ngày gần nhất.</p>
         <?php endif; ?>
     </div>
+</section>
 </section>
  <section class="featured-categories-section">
     <div class="container">
