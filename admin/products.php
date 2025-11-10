@@ -95,6 +95,7 @@ if ($apiResponse && isset($apiResponse['data'])) {
   // Lấy dữ liệu gộp theo sản phẩm (không dùng sp.giagiam)
   $sql = "
     SELECT
+      tk.soluong as ton,
       sp.masp,
       sp.tensp,
       sp.giaban,
