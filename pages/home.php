@@ -1,3 +1,51 @@
+
+<style>
+.price .new{font-weight:700}
+.price .old{text-decoration:line-through;color:#777;font-size:12px}
+</style>
+
+
+<style>
+.auto-slide-layer img{width:100%;height:auto;object-fit:cover;display:block}
+</style>
+
+<style>
+.hero{position:relative}
+.banner-slider{position:relative;overflow:hidden;border-radius:12px}
+.banner-slider .slide{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}
+.banner-slider .slide.is-active{opacity:1;z-index:2}
+.banner-slider img{width:100%;height:auto;display:block;object-fit:cover}
+.banner-slider .nav{
+  position:absolute;top:50%;transform:translateY(-50%);
+  background:rgba(0,0,0,.35);color:#fff;border:0;width:40px;height:40px;border-radius:999px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center
+}
+.banner-slider .nav:hover{background:rgba(0,0,0,.5)}
+.banner-slider .prev{left:12px}
+.banner-slider .next{right:12px}
+.banner-slider .dots{
+  position:absolute;left:0;right:0;bottom:10px;display:flex;gap:8px;justify-content:center;z-index:3
+}
+.banner-slider .dots button{
+  width:8px;height:8px;border-radius:999px;border:0;background:rgba(255,255,255,.5);cursor:pointer
+}
+.banner-slider .dots button.active{background:#fff;width:18px;border-radius:8px}
+@media (max-width:768px){
+  .banner-slider .nav{width:34px;height:34px}
+}
+</style>
+
+<style>
+/* Ensure layout looks good after removing sidebar */
+.sidebar{display:none !important;}
+.main-content{display:block !important; width:100%;}
+.main-content .content{width:100%; max-width:100%;}
+/* Deal prices */
+.product-card .price{display:flex; gap:8px; align-items:baseline;}
+.product-card .price .new{font-weight:700;}
+.product-card .price .old{text-decoration:line-through; color:#777; font-size:12px;}
+</style>
+
 <?php
 // Bổ sung các file cấu hình và hàm cần thiết
 // Giả sử db.php đã được include hoặc hàm pdo() và money_vn() đã được định nghĩa
@@ -47,20 +95,28 @@ $brand_discounts = [
 // Cập nhật truy vấn Deal: Ưu tiên deal giảm giá cao và deal có giới hạn số lượng
 $sql_deal = "
     SELECT 
-        sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm, km.phantram_giam, km.gia_giam_co_dinh
+        sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm,
+        km.tenkm, km.phantram_giam, km.gia_giam_co_dinh, km.soluong_deal_conlai,
+        CASE
+            WHEN km.phantram_giam IS NOT NULL AND km.phantram_giam > 0
+                THEN ROUND(sp.giaban * (1 - km.phantram_giam/100), 0)
+            WHEN km.gia_giam_co_dinh IS NOT NULL AND km.gia_giam_co_dinh > 0
+                THEN GREATEST(0, sp.giaban - km.gia_giam_co_dinh)
+            ELSE sp.giaban
+        END AS gia_sau_giam
     FROM sanpham sp
     JOIN danhmuc dm ON sp.madm = dm.madm
     JOIN khuyenmai km ON sp.makm = km.makm
     WHERE km.trangthai_deal = 'dang_dien_ra'
+      AND NOW() BETWEEN km.ngay_batdau AND km.ngay_ketthuc
+      AND (km.soluong_deal_conlai IS NULL OR km.soluong_deal_conlai > 0)
     ORDER BY 
-        km.phantram_giam DESC, -- Deal giảm % cao hơn hiển thị trước
-        km.soluong_deal_conlai ASC, -- Deal sắp hết hàng hiển thị trước
+        gia_sau_giam ASC,
+        km.phantram_giam DESC,
         sp.masp ASC
     LIMIT 4
 ";
 $deals = pdo()->query($sql_deal)->fetchAll();
-
-
 // --- 2. Lấy Sản phẩm bán chạy nhất (Top 4 - Sửa lỗi LIMIT & IN Subquery) ---
 // CHỈ LẤY ID CỦA CÁC SẢN PHẨM BÁN CHẠY NHẤT VÀ KHÔNG SỬ DỤNG JSON_EXTRACT TRONG GROUP BY/ORDER BY
 // Cách an toàn nhất là lấy ID cứng của các sản phẩm có doanh số tốt trong dữ liệu mẫu.
@@ -139,7 +195,161 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
   font-weight: 500;
 }
 </style>
+<style>
+/* --- Deal Section Styling --- */
+.deal-section {
+    padding: 25px 0;
+    margin-bottom: 30px;
+    background-color: #fff; /* Nền trắng */
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.deal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding: 0 15px;
+    border-bottom: 2px solid #f0f0f0; /* Đường kẻ dưới */
+    padding-bottom: 15px;
+}
+
+.deal-header h2 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffffffff; /* Màu đỏ nổi bật cho tiêu đề */
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.deal-timer {
+    display: flex;
+    align-items: center;
+    font-size: 18px;
+    font-weight: 600;
+    color: #e74c3c;
+    background-color: #fff0f0; /* Nền nhẹ cho đồng hồ */
+    padding: 5px 15px;
+    border-radius: 6px;
+}
+
+.deal-timer i {
+    margin-right: 8px;
+    color: #e74c3c;
+}
+
+.deal-timer #countdown {
+    margin-left: 8px;
+    font-size: 20px;
+    color: #c0392b; /* Màu đậm hơn cho đồng hồ */
+}
+
+/* Product Grid Layout */
+.deal-section .product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    padding: 0 15px;
+}
+
+/* Product Card trong Deal */
+.deal-section .product-card {
+    border: 1px solid #eee;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    position: relative;
+    background-color: #fff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+}
+
+.deal-section .product-card:hover {
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    transform: translateY(-3px);
+}
+
+.deal-section .product-image {
+    padding: 15px;
+    text-align: center;
+    height: 180px; /* Chiều cao cố định */
+}
+
+.deal-section .product-image img {
+    max-height: 100%;
+    width: auto;
+    object-fit: contain;
+}
+
+.deal-section .product-info {
+    padding: 10px 15px 15px;
+}
+
+.deal-section .product-category {
+    font-size: 12px;
+    color: #2ecc71; /* Màu xanh lá cho danh mục */
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.deal-section .product-name {
+    font-size: 15px;
+    font-weight: 600;
+    height: 40px;
+    overflow: hidden;
+    color: #34495e;
+    line-height: 1.3;
+    margin-bottom: 10px;
+}
+
+/* Price Block */
+.deal-section .product-price {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap; /* Cho phép xuống dòng trên mobile */
+}
+
+.deal-section .current-price {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e74c3c; /* Giá mới màu đỏ nổi bật */
+}
+
+.deal-section .original-price {
+    font-size: 13px;
+    color: #95a5a6;
+    text-decoration: line-through;
+}
+
+.deal-section .discount-badge {
+    background-color: #f39c12; /* Màu cam cho badge */
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.deal-section .add-to-cart {
+    background-color: #2980b9;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    width: 100%;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+
+.deal-section .add-to-cart:hover {
+    background-color: #3498db;
+}
+</style>
     <!-- Hero Banner Carousel -->
+     <!-- Hero Banner Carousel -->
     <section class="hero-banner">
         <div class="carousel-container">
             <div class="carousel-slides">
@@ -170,14 +380,10 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
                 <i class="fas fa-chevron-right"></i>
             </button>
 
-            <!-- Indicators -->
-            <div class="carousel-indicators">
-                <button class="indicator active" data-slide="0"></button>
-                <button class="indicator" data-slide="1"></button>
-                <button class="indicator" data-slide="2"></button>
-            </div>
+          
         </div>
     </section>
+
 
 <!-- Banner Grid Section -->
 <section class="banner-grid-section">
@@ -207,7 +413,7 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
 
                         <!-- Thêm các slide khác -->
                         <div class="banner-slide">
-                                <img src="/static/img/banner/H1_desktop_805x246_8c1d616da4.webp"
+                                <img src="static/img/banner/H1_desktop_805x246_8c1d616da4.webp"
                                      alt="Vitabiotics" class="desktop-img">
 
                         </div>
@@ -246,25 +452,36 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
     </div>
 </section>
 
-    <!-- Main Content -->
-    <div class="container">
-        <!-- Deal Section -->
-       <section class="deal-section">
+   <section class="deal-section">
     <div class="deal-header">
-        <h2>DEAL XIN QUẢ XINH - ƯU ĐÃI MỖI NGÀY</h2>
+        <h2>DEAL XỊN QUẢ XINH - ƯU ĐÃI MỖI NGÀY</h2>
         <div class="deal-timer">
-            <i class="fas fa-clock"></i> Kết thúc sau: <span id="countdown">18:45:32</span>
+            <i class="fas fa-clock"></i> 
+            Kết thúc sau: 
+            <span id="countdown">
+                <?php
+                    // Hiển thị thời gian kết thúc của deal đầu tiên (nếu có)
+                    if (!empty($deals)) {
+                        echo date('H:i:s', strtotime($deals[0]['ngay_ketthuc']) - time()); // Placeholder
+                    } else {
+                        echo 'N/A';
+                    }
+                ?>
+            </span>
         </div>
     </div>
     <div class="product-grid">
         <?php foreach ($deals as $product): ?>
         <?php 
+            // Đã tính toán ở trên: $current_price, $discount_percent, $image_path
             $current_price = calculate_sale_price($product['giaban'], $product['phantram_giam'], $product['gia_giam_co_dinh']);
             $discount_amount = $product['giaban'] - $current_price;
-            $discount_percent = round(($discount_amount / $product['giaban']) * 100);
+            $discount_percent = ($product['giaban'] > 0) ? round(($discount_amount / $product['giaban']) * 100) : 0;
             $image_path = $product['hinhsp'] ? $product['hinhsp'] : 'static/img/placeholder.jpg';
         ?>
         <div class="product-card">
+            <?php if ($discount_percent > 0): ?>
+                 <?php endif; ?>
             <div class="product-image">
                 <img src="<?= $image_path ?>" alt="<?= htmlspecialchars($product['tensp']) ?>">
             </div>
@@ -272,13 +489,15 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
                 <div class="product-category"><?= htmlspecialchars($product['tendm']) ?></div>
                 <div class="product-name"><?= htmlspecialchars($product['tensp']) ?></div>
                 <div class="product-price">
-                    <span class="current-price"><?= money_vn($current_price) ?>đ</span>
-                    <span class="original-price"><?= money_vn($product['giaban']) ?>đ</span>
-                    <span class="discount-badge">-<?= $discount_percent ?>%</span>
+                    <span class="current-price"><?= money_vn($current_price) ?>₫</span>
+                    <?php if ($product['giaban'] > $current_price): ?>
+                        <span class="original-price"><?= money_vn($product['giaban']) ?>₫</span>
+                        <span class="discount-badge">-<?= $discount_percent ?>%</span>
+                    <?php endif; ?>
                 </div>
                 <div class="product-actions">
                     <button class="add-to-cart" data-product-id="<?= $product['masp'] ?>">
-                        Thêm giỏ hàng
+                        Chọn mua
                     </button>
                 </div>
             </div>
@@ -292,18 +511,9 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
 </section>
         <div class="main-content">
             <!-- Sidebar -->
-            <aside class="sidebar">
-                <h2>Danh mục sản phẩm</h2>
-                <ul>
-                    <li><a href="#"><i class="fas fa-capsules"></i> Thực phẩm chức năng</a></li>
-                    <li><a href="#"><i class="fas fa-pills"></i> Thuốc</a></li>
-                    <li><a href="#"><i class="fas fa-stethoscope"></i> Thiết bị y tế</a></li>
-                    <li><a href="#"><i class="fas fa-heartbeat"></i> Chăm sóc sức khỏe</a></li>
-                    <li><a href="#"><i class="fas fa-baby"></i> Mẹ và bé</a></li>
-                    <li><a href="#"><i class="fas fa-user-md"></i> Dược mỹ phẩm</a></li>
-                    <li><a href="#"><i class="fas fa-notes-medical"></i> Bệnh thường gặp</a></li>
-                </ul>
-            </aside>
+            
+<!-- Sidebar removed -->
+
 
             <!-- Content -->
             <div class="content">
@@ -382,147 +592,6 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
     </div>
 </section>
 
-                <!-- Featured Categories Section -->
-<section class="featured-categories-section">
-    <div class="container">
-        <div class="section-header">
-            <h2>Danh mục nổi bật</h2>
-        </div>
-        <div class="categories-grid">
-            <!-- Category 1 -->
-            <div class="category-item" data-category="than-kinh-nao">
-                <div class="category-icon">
-                    <i class="fas fa-brain"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Thần kinh não</h3>
-                    <span class="category-count">55 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 2 -->
-            <div class="category-item" data-category="vitamin-khoang-chat">
-                <div class="category-icon">
-                    <i class="fas fa-capsules"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Vitamin & Khoáng chất</h3>
-                    <span class="category-count">110 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 3 -->
-            <div class="category-item" data-category="suc-khoe-tim-mach">
-                <div class="category-icon">
-                    <i class="fas fa-heartbeat"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Sức khoẻ tim mạch</h3>
-                    <span class="category-count">23 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 4 -->
-            <div class="category-item" data-category="mien-dich">
-                <div class="category-icon">
-                    <i class="fas fa-shield-virus"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Tăng sức đề kháng, miễn dịch</h3>
-                    <span class="category-count">40 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 5 -->
-            <div class="category-item" data-category="ho-tro-tieu-hoa">
-                <div class="category-icon">
-                    <i class="fas fa-stomach"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Hỗ trợ tiêu hóa</h3>
-                    <span class="category-count">65 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 6 -->
-            <div class="category-item" data-category="noi-tiet-to">
-                <div class="category-icon">
-                    <i class="fa-solid fa-capsules"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Sinh lý - Nội tiết tố</h3>
-                    <span class="category-count">39 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 7 -->
-            <div class="category-item" data-category="dinh-duong">
-                <div class="category-icon">
-                    <i class="fas fa-apple-alt"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Dinh dưỡng</h3>
-                    <span class="category-count">36 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 8 -->
-            <div class="category-item" data-category="ho-tro-dieu-tri">
-                <div class="category-icon">
-                    <i class="fas fa-stethoscope"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Hỗ trợ điều trị</h3>
-                    <span class="category-count">119 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 9 -->
-            <div class="category-item" data-category="giai-phap-lan-da">
-                <div class="category-icon">
-                    <i class="fas fa-spa"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Giải pháp làn da</h3>
-                    <span class="category-count">94 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 10 -->
-            <div class="category-item" data-category="cham-soc-da-mat">
-                <div class="category-icon">
-                    <i class="fas fa-user-circle"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Chăm sóc da mặt</h3>
-                    <span class="category-count">211 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 11 -->
-            <div class="category-item" data-category="ho-tro-lam-dep">
-                <div class="category-icon">
-                    <i class="fas fa-star"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Hỗ trợ làm đẹp</h3>
-                    <span class="category-count">22 sản phẩm</span>
-                </div>
-            </div>
-
-            <!-- Category 12 -->
-            <div class="category-item" data-category="ho-tro-tinh-duc">
-                <div class="category-icon">
-                    <i class="fas fa-heart"></i>
-                </div>
-                <div class="category-info">
-                    <h3 class="category-name">Hỗ trợ tình dục</h3>
-                    <span class="category-count">41 sản phẩm</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
 
                 <!-- Disease Section -->
                 <div class="disease-section">
@@ -652,16 +721,107 @@ $products_banchay = pdo()->query($sql_banchay_safe)->fetchAll();
     </div>
 
 
-<div id="footer"></div>
-<!-- <script>
-  fetch("footer.php")
-    .then(response => response.text())
-    .then(data => document.getElementById("footer").innerHTML = data);
-</script>  
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="static/js/script.js"></script>
     <script src="static/js/about.js"></script>
     <script src="static/js/search.js"></script>
+<script>
+(function(){
+  const root = document.getElementById('banner');
+  if(!root) return;
+  const slides = Array.from(root.querySelectorAll('.slide'));
+  const prev = root.querySelector('.prev');
+  const next = root.querySelector('.next');
+  const dotsWrap = root.querySelector('.dots');
+
+  let i = 0, timer = null, interval = 4000, isHover = false;
+
+  // Dots
+  slides.forEach((_, idx) => {
+    const b = document.createElement('button');
+    b.addEventListener('click', () => go(idx, true));
+    dotsWrap.appendChild(b);
+  });
+
+  function render(){
+    slides.forEach((s, idx) => s.classList.toggle('is-active', idx === i));
+    dotsWrap.querySelectorAll('button').forEach((d, idx) => d.classList.toggle('active', idx === i));
+  }
+
+  function go(to, user=false){
+    i = (to + slides.length) % slides.length;
+    render();
+    if(user) restart();
+  }
+
+  function nextSlide(){ go(i+1); }
+  function prevSlide(){ go(i-1); }
+
+  function start(){
+    if(timer) clearInterval(timer);
+    timer = setInterval(() => { if(!isHover) nextSlide(); }, interval);
+  }
+  function restart(){ start(); }
+
+  // Hover pause
+  root.addEventListener('mouseenter', () => { isHover = true; });
+  root.addEventListener('mouseleave', () => { isHover = false; });
+
+  // Nav
+  prev && prev.addEventListener('click', prevSlide);
+  next && next.addEventListener('click', nextSlide);
+
+  // Swipe
+  let x0=null;
+  root.addEventListener('touchstart', e=>{ x0 = e.touches[0].clientX; }, {passive:true});
+  root.addEventListener('touchend', e=>{
+    if(x0===null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if(Math.abs(dx) > 40){ dx>0 ? prevSlide() : nextSlide(); }
+    x0=null;
+  }, {passive:true});
+
+  render(); start();
+})();
+</script>
+
+<script>
+(function(){
+  // Pick the first container that looks like the big banner
+  const root = document.querySelector('.hero, .banner, .banner-slider, .banner-wrap, .top-banner, .carousel, .slider');
+  if(!root) return;
+  let imgs = Array.from(root.querySelectorAll('img'));
+  // Prefer images with 'banner' in src
+  let bannerImgs = imgs.filter(i => /banner/i.test(i.src));
+  if (bannerImgs.length < 2) bannerImgs = imgs;
+  if (bannerImgs.length < 2) return;
+
+  // Wrap into layers if not already
+  bannerImgs.forEach(img => {
+    if (img.closest('.auto-slide-layer')) return;
+    const layer = document.createElement('div');
+    layer.className = 'auto-slide-layer';
+    img.parentNode.insertBefore(layer, img);
+    layer.appendChild(img);
+  });
+
+  const layers = Array.from(root.querySelectorAll('.auto-slide-layer'));
+  layers.forEach(l => { l.style.position='absolute'; l.style.inset='0'; l.style.opacity='0'; l.style.transition='opacity .5s ease'; });
+  if (getComputedStyle(root).position === 'static') root.style.position='relative';
+  root.style.overflow='hidden';
+
+  let i = 0, timer=null, hover=false, interval=4000;
+  function render(){ layers.forEach((l,idx)=> l.style.opacity = (idx===i ? '1':'0')); }
+  function next(){ i = (i+1) % layers.length; render(); }
+
+  root.addEventListener('mouseenter', ()=> hover = true);
+  root.addEventListener('mouseleave', ()=> hover = false);
+
+  render();
+  timer = setInterval(()=>{ if(!hover) next(); }, interval);
+})();
+</script>
+
 </body>
-</html>-->
+</html>

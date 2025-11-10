@@ -106,33 +106,34 @@ $page_css = '<link rel="stylesheet" href="static/css/search.css">';
         <h1>Tra cứu Thuốc, Dược Chất & Dược Liệu</h1>
         <p class="intro-text">Tìm kiếm thông tin chi tiết về sản phẩm, thành phần hóa học và các loại thảo dược y tế.</p>
         
-        <form id="searchForm" action="<?= $base_url ?>/base.php" method="GET">
-            <input type="hidden" name="page" id="pageTarget" value="search_tool"> 
-            <div class="search-bar">
-                <input type="text" 
-                       placeholder="Nhập tên thuốc, dược chất, dược liệu..." 
-                       id="searchInput" 
-                       name="q" 
-                       required>
-                <button type="submit" id="searchBtn">
-                    <i class="fas fa-search"></i> Tra cứu
-                </button>
-            </div>
-            
-            <div class="filters">
-                <p class="filter-label">Bạn muốn tra cứu:</p>
-                <?php foreach ($search_categories as $cat): ?>
-                    <label>
-                        <input type="radio" 
-                               name="type" 
-                               value="<?= $cat['value'] ?>" 
-                               <?= ($cat['value'] == 'drug' ? 'checked' : '') ?>> 
-                        <?= htmlspecialchars($cat['tendm']) ?>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-        </form>
-        
+       <form id="searchForm" action="<?= $base_url ?>/base.php" method="GET">
+    <input type="hidden" name="page" id="pageTarget" value="search_results_drug"> 
+    
+    <div class="search-bar">
+        <input type="text" 
+               placeholder="Nhập tên thuốc, dược chất, dược liệu..." 
+               id="searchInput" 
+               name="q" 
+               required>
+        <button type="submit" id="searchBtn">
+            <i class="fas fa-search"></i> Tra cứu
+        </button>
+    </div>
+    
+    <div class="filters">
+        <p class="filter-label">Bạn muốn tra cứu:</p>
+        <?php foreach ($search_categories as $cat): ?>
+            <label>
+                <input type="radio" 
+                       name="type" 
+                       value="<?= $cat['value'] ?>" 
+                       data-target="search_results_<?= $cat['value'] ?>"
+                       <?= ($cat['value'] == 'drug' ? 'checked' : '') ?>> 
+                <?= htmlspecialchars($cat['tendm']) ?>
+            </label>
+        <?php endforeach; ?>
+    </div>
+</form>
       </div>
       <div class="search-img">
         <img src="<?= $base_url ?>/static/img/pngtree-herbal-supplements-and-ingredients-illustration-png-image_18813782.png" alt="Pharmacist illustration">
@@ -333,32 +334,29 @@ $page_css = '<link rel="stylesheet" href="static/css/search.css">';
 .phan-loai { font-size: 13px; color: #7f8c8d; display: block; margin-top: 5px; }
 
 </style>
-
-
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const pageTarget = document.getElementById('pageTarget');
-        const filterRadios = document.querySelectorAll('input[name="type"]');
-        const searchForm = document.getElementById('searchForm');
-
-        // Khởi tạo trạng thái ban đầu của trang đích dựa trên radio button được chọn (mặc định là 'drug')
-        function updatePageTarget() {
-            const selectedFilter = document.querySelector('input[name="type"]:checked');
-            if (selectedFilter) {
-                // Tất cả các loại tra cứu (drug, duocchat, duoclieu) sẽ được chuyển đến trang xử lý chung 'search_tool'
-                pageTarget.value = 'search_tool'; 
-            }
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const pageTarget = document.getElementById('pageTarget');
+    const filterRadios = document.querySelectorAll('input[name="type"]');
+    
+    // Hàm cập nhật trường ẩn 'pageTarget' dựa trên radio button được chọn
+    function updatePageTarget() {
+        const selectedFilter = document.querySelector('input[name="type"]:checked');
+        if (selectedFilter) {
+            // Lấy giá trị data-target (ví dụ: search_results_drug, search_results_duocchat)
+            const targetPage = selectedFilter.getAttribute('data-target');
+            pageTarget.value = targetPage; 
         }
+    }
 
-        // Lắng nghe sự kiện thay đổi radio button
-        filterRadios.forEach(radio => {
-            radio.addEventListener('change', updatePageTarget);
-        });
-        
-        // Đảm bảo trang đích được thiết lập đúng khi tải trang
-        updatePageTarget(); 
-        
-        // Cần đảm bảo form action là base.php để xử lý điều hướng
-        searchForm.action = '<?= $base_url ?>/base.php';
+    // Lắng nghe sự kiện thay đổi radio button
+    filterRadios.forEach(radio => {
+        radio.addEventListener('change', updatePageTarget);
     });
-    </script>
+    
+    // Khởi tạo trạng thái ban đầu khi tải trang (Mặc định là 'drug')
+    // Nếu giá trị khởi tạo bị sai, ta sửa lại:
+    pageTarget.value = 'search_results_drug'; 
+    updatePageTarget(); // Chạy lần đầu để đảm bảo giá trị đúng
+});
+</script>
