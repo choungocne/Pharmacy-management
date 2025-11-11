@@ -8,6 +8,8 @@ if (!function_exists('pdo')) {
     require_once 'db.php'; 
 }
 
+require_once __DIR__ . '/effect.php';
+
 // --- THIẾT LẬP BASE URL ---
 $base_url = '/Pharmacy-management'; 
 
@@ -122,6 +124,8 @@ foreach ($cart_rows as $row) {
 }
 
 $cart_count = count($cart_items);
+
+render_pills_effect_assets();
 ?>
 
 <div class="header-bar">
@@ -165,53 +169,57 @@ $cart_count = count($cart_items);
                     <?php endif; ?>
                 </a>
                 
-                <!-- DROPDOWN GIỎ HÀNG -->
+                                <!-- DROPDOWN GI? H?NG -->
                 <div class="cart-dropdown">
-                    <div class="cart-dropdown-header">
-                        <span class="cart-title">Giỏ hàng</span>
-                    </div>
-                    
-                    <div class="cart-dropdown-body">
-                        <?php if (empty($cart_items)): ?>
-                            <div class="cart-empty">
-                                <i class="fas fa-shopping-cart"></i>
-                                <p>Giỏ hàng trống</p>
+                    <div class="cart-dropdown-surface effect-pills-container" data-effect-fallback-width="380" data-effect-fallback-height="320">
+                        <div class="effect-pills-content">
+                            <div class="cart-dropdown-header">
+                                <span class="cart-title">Giỏ hàng</span>
                             </div>
-                        <?php else: ?>
-                            <?php foreach ($cart_items as $item): ?>
-                                <div class="cart-item" data-id="<?= (int)$item['id'] ?>">
-                                    <div class="cart-item-img">
-                                        <a href="<?= $base_url ?>/base.php?page=product&id=<?= $item['masp'] ?>">
-                                            <img src="<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['name']) ?>">
-                                        </a>
+                            
+                            <div class="cart-dropdown-body">
+                                <?php if (empty($cart_items)): ?>
+                                    <div class="cart-empty">
+                                        <i class="fas fa-shopping-cart"></i>
+                                        <p>Gi? h?ng tr?ng</p>
                                     </div>
-                                    <div class="cart-item-info">
-                                        <a href="<?= $base_url ?>/base.php?page=product&id=<?= $item['masp'] ?>" class="cart-item-name">
-                                            <?= htmlspecialchars($item['name']) ?>
-                                        </a>
-                                        <div class="cart-item-bottom">
-                                            <div class="cart-item-price">
-                                                <span class="price"><?= number_format($item['giaban'] ?? 0, 0, ',', '.') ?>d</span>
+                                <?php else: ?>
+                                    <?php foreach ($cart_items as $item): ?>
+                                        <div class="cart-item" data-id="<?= (int)$item['id'] ?>">
+                                            <div class="cart-item-img">
+                                                <a href="<?= $base_url ?>/base.php?page=product&id=<?= $item['masp'] ?>">
+                                                    <img src="<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['name']) ?>">
+                                                </a>
                                             </div>
-                                            <span class="cart-item-quantity">x<?= (int)($item['quantity'] ?? 0) ?> <?= htmlspecialchars($item['unit'] ?? 'Hộp') ?></span>
+                                            <div class="cart-item-info">
+                                                <a href="<?= $base_url ?>/base.php?page=product&id=<?= $item['masp'] ?>" class="cart-item-name">
+                                                    <?= htmlspecialchars($item['name']) ?>
+                                                </a>
+                                                <div class="cart-item-bottom">
+                                                    <div class="cart-item-price">
+                                                        <span class="price"><?= number_format($item['giaban'] ?? 0, 0, ',', '.') ?>d</span>
+                                                    </div>
+                                                    <span class="cart-item-quantity">x<?= (int)($item['quantity'] ?? 0) ?> <?= htmlspecialchars($item['unit'] ?? 'H?p') ?></span>
+                                                </div>
+                                            </div>
+                                            <button class="cart-item-delete" onclick="removeFromCart(<?= (int)$item['id'] ?>)">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
                                         </div>
-                                    </div>
-                                    <button class="cart-item-delete" onclick="removeFromCart(<?= (int)$item['id'] ?>)">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                    
-                    <?php if (!empty($cart_items)): ?>
-                        <div class="cart-dropdown-footer">
-                            <div class="cart-summary">
-                                <span class="cart-total-items"><?= $cart_count ?> sản phẩm</span>
-                                <a href="<?= $base_url ?>/base.php?page=cart" class="btn-view-cart">Xem giỏ hàng</a>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
+                            
+                            <?php if (!empty($cart_items)): ?>
+                                <div class="cart-dropdown-footer">
+                                    <div class="cart-summary">
+                                        <span class="cart-total-items"><?= $cart_count ?> sản phẩm</span>
+                                        <a href="<?= $base_url ?>/base.php?page=cart" class="btn-view-cart">Xem giỏ hàng</a>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </div>
-                    <?php endif; ?>
+                    </div>
                 </div>
             </div>
             
@@ -315,10 +323,19 @@ $cart_count = count($cart_items);
     }
     
     .cart-dropdown {
-        display: none; position: absolute; top: calc(100% + 15px); right: 0;
-        background-color: white; width: 420px;
-        border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        display: none;
+        position: absolute;
+        top: calc(100% + 15px);
+        right: 0;
+        width: 420px;
+        padding-top: 14px;
+        background: transparent;
         z-index: 1000;
+    }
+    
+    .cart-dropdown-surface {
+        position: relative;
+        border-radius: 24px;
     }
     
     .cart-wrapper:hover .cart-dropdown,
@@ -326,11 +343,21 @@ $cart_count = count($cart_items);
     .cart-wrapper.open .cart-dropdown { display: block; }
     
     .cart-dropdown::before {
-        content: ''; position: absolute; top: -8px; right: 20px;
-        width: 0; height: 0;
-        border-left: 8px solid transparent;
-        border-right: 8px solid transparent;
-        border-bottom: 8px solid white;
+        content: '';
+        position: absolute;
+        top: 6px;
+        right: 36px;
+        width: 18px;
+        height: 18px;
+        background: linear-gradient(145deg, rgba(224, 247, 250, 0.95), rgba(179, 229, 252, 0.95));
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        box-shadow: 0 12px 30px rgba(2, 132, 199, 0.25);
+        transform: rotate(45deg);
+        z-index: 0;
+    }
+    
+    .cart-dropdown .effect-pills-content {
+        border-radius: 20px;
     }
     
     .cart-dropdown-header {
@@ -454,15 +481,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const cartWrapper = document.querySelector('.cart-wrapper');
     if (!cartWrapper) return;
     const cartTrigger = cartWrapper.querySelector('.cart-trigger');
+    let autoCloseTimer = null;
+
+    const openCartDropdown = (autoClose = false) => {
+        cartWrapper.classList.add('open');
+        if (autoClose) {
+            clearTimeout(autoCloseTimer);
+            autoCloseTimer = setTimeout(() => cartWrapper.classList.remove('open'), 4000);
+        }
+    };
+
     cartTrigger.addEventListener('click', function(e) {
         e.preventDefault();
-        cartWrapper.classList.toggle('open');
+        if (cartWrapper.classList.contains('open')) {
+            cartWrapper.classList.remove('open');
+        } else {
+            openCartDropdown();
+        }
     });
+
     document.addEventListener('click', function(e) {
         if (!cartWrapper.contains(e.target)) {
             cartWrapper.classList.remove('open');
         }
     });
+
+    document.addEventListener('header-cart:open', function() {
+        openCartDropdown(true);
+    });
+
+    window.showHeaderMiniCart = openCartDropdown;
 });
 
 function removeFromCart(id) {
