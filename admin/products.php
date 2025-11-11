@@ -25,7 +25,7 @@ $page         = max(1,(int)($_GET['page'] ?? 1));
 
 // Hàm gọi API
 function callAPI($endpoint, $params = []) {
-  $baseURL = 'http://localhost/pharmacy-management/api/products.php';
+  $baseURL = 'http://localhost/pharmacy-management/api/api_products.php';
   $url = $baseURL . $endpoint;
   if (!empty($params)) {
     $url .= '?' . http_build_query($params);
@@ -260,11 +260,11 @@ function build_url($q,$dm,$page,$per){
                 <?php endif; ?>
               </div>
               <div class="mt-3 flex gap-2">
-                <a href="/pharmacy-management/product_detail.php?masp=<?= (int)$r['masp'] ?>"
+                <a href="/pharmacy-management/admin/product_detail.php?masp=<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm transition">Xem</a>
-                <button onclick="openEditModal(<?= (int)$r['masp'] ?>)"
+                <button type="button" data-edit-id="<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</button>
-                <button onclick="deleteProduct(<?= (int)$r['masp'] ?>)"
+                <button type="button" data-delete-id="<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm transition">Xóa</button>
               </div>
             </div>
@@ -325,27 +325,21 @@ function build_url($q,$dm,$page,$per){
     </div>
 
     <form id="productForm" class="space-y-4">
-      <input type="hidden" id="productId">
+      <input type="hidden" id="productId" name="masp">
 
       <div>
         <label class="block text-sm font-medium mb-1">Tên sản phẩm <span class="text-red-500">*</span></label>
-        <input type="text" id="tensp" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <input type="text" id="tensp" name="tensp" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
 
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium mb-1">Giá bán <span class="text-red-500">*</span></label>
-          <input type="number" id="giaban" required min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
-        </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Giá giảm</label>
-          <input type="number" id="giagiam" min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
-        </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Giá bán <span class="text-red-500">*</span></label>
+        <input type="number" id="giaban" name="giaban" required min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
 
       <div>
         <label class="block text-sm font-medium mb-1">Danh mục <span class="text-red-500">*</span></label>
-        <select id="madm" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <select id="madm" name="madm" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
           <option value="">-- Chọn danh mục --</option>
           <?php foreach($cats as $c): ?>
             <option value="<?=$c['madm']?>"><?=$c['tendm']?></option>
@@ -355,26 +349,26 @@ function build_url($q,$dm,$page,$per){
 
       <div>
         <label class="block text-sm font-medium mb-1">Hình ảnh (URL)</label>
-        <input type="text" id="hinhsp" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <input type="text" id="hinhsp" name="hinhsp" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
 
       <div>
         <label class="block text-sm font-medium mb-1">Công dụng</label>
-        <textarea id="congdung" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
+        <textarea id="congdung" name="congdung" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
       </div>
 
       <div>
         <label class="block text-sm font-medium mb-1">Xuất xứ</label>
-        <input type="text" id="xuatxu" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
+        <input type="text" id="xuatxu" name="xuatxu" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400">
       </div>
 
       <div>
         <label class="block text-sm font-medium mb-1">Cách dùng</label>
-        <textarea id="cachdung" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
+        <textarea id="cachdung" name="cachdung" rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400"></textarea>
       </div>
 
       <div class="flex items-center gap-2">
-        <input type="checkbox" id="requires_rx" class="w-4 h-4">
+        <input type="checkbox" id="requires_rx" name="requires_rx" class="w-4 h-4">
         <label for="requires_rx" class="text-sm">Yêu cầu đơn thuốc</label>
       </div>
 
@@ -391,87 +385,132 @@ function build_url($q,$dm,$page,$per){
 </div>
 
 <script>
-const API_URL = 'http://localhost/pharmacy-management/api/products.php';
+document.addEventListener('DOMContentLoaded', () => {
+  const API_URL = '/pharmacy-management/api/api_products.php';
+  const modalEl = document.getElementById('productModal');
+  const form = document.getElementById('productForm');
+  if (!modalEl || !form) return;
 
-function openAddModal() {
-  document.getElementById('modalTitle').textContent = 'Thêm sản phẩm';
-  document.getElementById('productForm').reset();
-  document.getElementById('productId').value = '';
-  document.getElementById('productModal').classList.add('active');
-}
-
-async function openEditModal(id) {
-  try {
-    const response = await fetch(`${API_URL}/${id}`);
-    const product = await response.json();
-    if (product.error) { alert('Không tìm thấy sản phẩm!'); return; }
-    document.getElementById('modalTitle').textContent = 'Sửa sản phẩm';
-    document.getElementById('productId').value = product.masp;
-    document.getElementById('tensp').value = product.tensp || '';
-    document.getElementById('giaban').value = product.giaban || '';
-    document.getElementById('giagiam').value = product.giagiam || '';
-    document.getElementById('madm').value = product.madm || '';
-    document.getElementById('hinhsp').value = product.hinhsp || '';
-    document.getElementById('congdung').value = product.congdung || '';
-    document.getElementById('xuatxu').value = product.xuatxu || '';
-    document.getElementById('cachdung').value = product.cachdung || '';
-    document.getElementById('requires_rx').checked = product.requires_rx == 1;
-    document.getElementById('productModal').classList.add('active');
-  } catch (error) { alert('Lỗi khi tải dữ liệu: ' + error.message); }
-}
-
-function closeModal() {
-  document.getElementById('productModal').classList.remove('active');
-}
-
-document.getElementById('productForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const id = document.getElementById('productId').value;
-  const data = {
-    tensp: document.getElementById('tensp').value,
-    giaban: document.getElementById('giaban').value,
-    giagiam: document.getElementById('giagiam').value || 0,
-    madm: document.getElementById('madm').value,
-    hinhsp: document.getElementById('hinhsp').value,
-    congdung: document.getElementById('congdung').value,
-    xuatxu: document.getElementById('xuatxu').value,
-    cachdung: document.getElementById('cachdung').value,
-    requires_rx: document.getElementById('requires_rx').checked ? 1 : 0
+  const titleEl = document.getElementById('modalTitle');
+  window.editModal = window.editModal || {
+    show() { modalEl.classList.add('active'); },
+    hide() { modalEl.classList.remove('active'); }
   };
-  try {
-    let response;
-    if (id) {
-      response = await fetch(`${API_URL}/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
-    } else {
-      response = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+  const editModal = window.editModal;
+
+  const openAddModal = () => {
+    form.reset();
+    if (form.masp) form.masp.value = '';
+    if (titleEl) titleEl.textContent = 'Thêm sản phẩm';
+    editModal.show();
+  };
+  const closeModal = () => editModal.hide();
+  window.openAddModal = openAddModal;
+  window.closeModal = closeModal;
+
+  modalEl.addEventListener('click', (e) => {
+    if (e.target === modalEl) closeModal();
+  });
+
+  async function openEditModal(masp){
+    try{
+      const res = await fetch(`${API_URL}?id=${encodeURIComponent(masp)}`, { headers:{'Accept':'application/json'} });
+      const txt = await res.text();
+      let data;
+      try { data = JSON.parse(txt); }
+      catch { alert('API không trả JSON. Xem Network:\n'+txt.slice(0,400)); return; }
+      if(!res.ok || data.ok === false){
+        alert(data.message || 'Lỗi tải dữ liệu');
+        return;
+      }
+      form.masp.value        = data.masp ?? '';
+      form.tensp.value       = data.tensp ?? '';
+      form.giaban.value      = data.giaban ?? 0;
+      form.madm.value        = data.madm ?? '';
+      form.hinhsp.value      = data.hinhsp ?? '';
+      form.congdung.value    = data.congdung ?? '';
+      form.xuatxu.value      = data.xuatxu ?? '';
+      form.cachdung.value    = data.cachdung ?? '';
+      form.requires_rx.checked = !!(+data.requires_rx || 0);
+      if (titleEl) titleEl.textContent = 'Sửa sản phẩm';
+      editModal.show();
+    }catch(e){ alert(e.message); }
+  }
+
+  async function submitForm(e){
+    e.preventDefault();
+    const id = form.masp.value.trim();
+    const payload = {
+      tensp: form.tensp.value.trim(),
+      giaban: Number(form.giaban.value || 0),
+      madm: Number(form.madm.value || 0),
+      hinhsp: form.hinhsp.value.trim(),
+      congdung: form.congdung.value.trim(),
+      xuatxu: form.xuatxu.value.trim(),
+      cachdung: form.cachdung.value.trim(),
+      requires_rx: form.requires_rx.checked ? 1 : 0
+    };
+
+    const body = id ? { action:'update', ...payload } : payload;
+    const url = id ? `${API_URL}?id=${encodeURIComponent(id)}` : API_URL;
+    try{
+      const res = await fetch(url, {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify(body)
+      });
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); }
+      catch { alert('API không phải JSON:\n'+raw); return; }
+      if(!res.ok || data.ok === false || data.success === false){
+        alert(data.message || data.error || 'Cập nhật thất bại');
+        return;
+      }
+      editModal.hide();
+      location.reload();
+    }catch(error){
+      alert(error.message);
     }
-    const result = await response.json();
-    if (result.success) { alert(id ? 'Cập nhật thành công!' : 'Thêm sản phẩm thành công!'); closeModal(); location.reload(); }
-    else { alert('Lỗi: ' + (result.error || 'Không xác định')); }
-  } catch (error) { alert('Lỗi kết nối: ' + error.message); }
-});
+  }
 
-async function deleteProduct(id) {
-  if (!confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
-  try {
-    const response = await fetch(`${API_URL}/${id}`, { method:'DELETE' });
-    const result = await response.json();
-    if (result.success) { alert('Xóa thành công!'); location.reload(); }
-    else { alert('Lỗi: ' + (result.error || 'Không xác định')); }
-  } catch (error) { alert('Lỗi kết nối: ' + error.message); }
-}
+  async function deleteProduct(id){
+    if(!id || !confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
+    try{
+      const res = await fetch(`${API_URL}/${id}`, { method:'DELETE', headers:{'Accept':'application/json'} });
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); }
+      catch { alert('API không phải JSON:\n'+raw); return; }
+      if(!res.ok || data.success === false){
+        alert(data.error || 'Không xác định');
+        return;
+      }
+      location.reload();
+    }catch(error){
+      alert(error.message);
+    }
+  }
 
-document.getElementById('productModal').addEventListener('click', (e) => {
-  if (e.target.id === 'productModal') closeModal();
-});
+  form.addEventListener('submit', submitForm);
 
-document.querySelectorAll('[data-count]').forEach(el=>{
-  const target=+el.dataset.count; let v=0, step=Math.max(1, Math.round(target/30));
-  const tick=()=>{ v+=step; if(v>target) v=target; el.textContent=new Intl.NumberFormat('vi-VN').format(v); if(v<target) requestAnimationFrame(tick); };
-  tick();
+  document.querySelectorAll('[data-edit-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditModal(btn.dataset.editId));
+  });
+  document.querySelectorAll('[data-delete-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=>deleteProduct(btn.dataset.deleteId));
+  });
+
+  document.querySelectorAll('[data-count]').forEach(el=>{
+    const target=+el.dataset.count || 0;
+    let v=0;
+    const step=Math.max(1,Math.round(target/30));
+    const tick=()=>{ v+=step; if(v>target) v=target; el.textContent=new Intl.NumberFormat('vi-VN').format(v); if(v<target) requestAnimationFrame(tick); };
+    tick();
+  });
+  const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('fade-in')), {threshold:.12});
+  document.querySelectorAll('.card').forEach(c=>io.observe(c));
 });
-const io=new IntersectionObserver(es=>es.forEach(e=>e.isIntersecting&&e.target.classList.add('fade-in')), {threshold:.12});
-document.querySelectorAll('.card').forEach(c=>io.observe(c));
 </script>
 </body>
 </html>

@@ -1,12 +1,15 @@
 <?php
+declare(strict_types=1);
 // api/products.php
 // Include db.php để sử dụng hàm pdo()
 require_once __DIR__ . '/../db.php';
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization');
+ini_set('display_errors','0');
+error_reporting(E_ALL);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -14,6 +17,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 $pdo = pdo();
+
+$respond = function(array $payload, int $status = 200): void {
+  http_response_code($status);
+  echo json_encode($payload);
+  exit;
+};
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['id'])) {
+  $id = (int)$_GET['id'];
+  if ($id <= 0) {
+    $respond(['ok'=>false,'message'=>'ID không hợp lệ'],400);
+  }
+  $stmt = $pdo->prepare("SELECT masp,tensp,giaban,hinhsp,congdung,xuatxu,cachdung,requires_rx,madm FROM sanpham WHERE masp=?");
+  $stmt->execute([$id]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    $respond(['ok'=>false,'message'=>'Không tìm thấy'],404);
+  }
+  $respond($row);
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['id'])) {
+  $id = (int)$_GET['id'];
+  if ($id <= 0) {
+    $respond(['ok'=>false,'message'=>'ID không hợp lệ'],400);
+  }
+  $input = json_decode(file_get_contents('php://input'), true);
+  if (!is_array($input) || ($input['action'] ?? '') !== 'update') {
+    $respond(['ok'=>false,'message'=>'Thiếu action'],400);
+  }
+  $stmt = $pdo->prepare("UPDATE sanpham SET tensp=?, giaban=?, madm=?, hinhsp=?, congdung=?, xuatxu=?, cachdung=?, requires_rx=? WHERE masp=?");
+  $stmt->execute([
+    $input['tensp'] ?? '',
+    (float)($input['giaban'] ?? 0),
+    (int)($input['madm'] ?? 0),
+    $input['hinhsp'] ?? '',
+    $input['congdung'] ?? '',
+    $input['xuatxu'] ?? '',
+    $input['cachdung'] ?? '',
+    (int)($input['requires_rx'] ?? 0),
+    $id
+  ]);
+  $respond(['ok'=>true]);
+}
 
 $method = $_SERVER['REQUEST_METHOD'];
 $request = explode('/', trim($_SERVER['PATH_INFO'] ?? '', '/'));
@@ -30,7 +77,7 @@ switch ($method) {
     if ($id) {
       // Get single product
       $stmt = $pdo->prepare("
-        SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam, sp.hinhsp, sp.congdung, sp.xuatxu, sp.cachdung, sp.requires_rx,
+        SELECT sp.masp, sp.tensp, sp.giaban, sp.hinhsp, sp.congdung, sp.xuatxu, sp.cachdung, sp.requires_rx,
                sp.madv, sp.math, sp.mancc, sp.mamv, sp.madm, sp.trangthai, sp.created_at, sp.updated_at, sp.thanhphan, sp.hamluong,
                sp.chidinh, sp.chongchidinh, sp.tacdungphu, sp.tuongtac, sp.luuy, sp.baoche, sp.donggoi, sp.soluong, sp.giatri, 
                dm.tendm AS danhmuc, dv.tendv AS donvitinh, th.tenth AS thuonghieu, ncc.tenncc AS nhacungcap, mv.tenmv AS muivi,
@@ -61,7 +108,7 @@ switch ($method) {
       $offset = ($page - 1) * $perPage;
 
       $sql = "
-        SELECT sp.masp, sp.tensp, sp.giaban, sp.giagiam, sp.hinhsp, sp.congdung, sp.xuatxu, sp.cachdung, sp.requires_rx,
+        SELECT sp.masp, sp.tensp, sp.giaban, sp.hinhsp, sp.congdung, sp.xuatxu, sp.cachdung, sp.requires_rx,
                sp.madv, sp.math, sp.mancc, sp.mamv, sp.madm, sp.trangthai, sp.created_at, sp.updated_at, sp.thanhphan, sp.hamluong,
                sp.chidinh, sp.chongchidinh, sp.tacdungphu, sp.tuongtac, sp.luuy, sp.baoche, sp.donggoi, sp.soluong, sp.giatri, 
                dm.tendm AS danhmuc, dv.tendv AS donvitinh, th.tenth AS thuonghieu, ncc.tenncc AS nhacungcap, mv.tenmv AS muivi,
@@ -113,13 +160,12 @@ switch ($method) {
 
     try {
       $stmt = $pdo->prepare("
-        INSERT INTO sanpham (tensp, giaban, giagiam, hinhsp, congdung, xuatxu, cachdung, requires_rx, madv, math, mancc, mamv, madm, trangthai, thanhphan, hamluong, chidinh, chongchidinh, tacdungphu)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+        INSERT INTO sanpham (tensp, giaban, hinhsp, congdung, xuatxu, cachdung, requires_rx, madv, math, mancc, mamv, madm, trangthai)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
       ");
       $stmt->execute([
         $data['tensp'],
         $data['giaban'],
-        $data['giagiam'] ?? 0,
         $data['hinhsp'] ?? '',
         $data['congdung'] ?? '',
         $data['xuatxu'] ?? '',
@@ -129,12 +175,7 @@ switch ($method) {
         $data['math'] ?? null,
         $data['mancc'] ?? null,
         $data['mamv'] ?? null,
-        $data['madm'],
-        $data['thanhphan'] ?? '',
-        $data['hamluong'] ?? '',
-        $data['chidinh'] ?? '',
-        $data['chongchidinh'] ?? '',
-        $data['tacdungphu'] ?? ''
+        $data['madm']
       ]);
       $newId = $pdo->lastInsertId();
       echo json_encode(['success' => true, 'id' => $newId]);
@@ -157,7 +198,7 @@ switch ($method) {
 
     $fields = [];
     $params = [];
-    foreach (['tensp', 'giaban', 'giagiam', 'hinhsp', 'congdung', 'xuatxu', 'cachdung', 'requires_rx', 'madv', 'math', 'mancc', 'mamv', 'madm', 'thanhphan', 'hamluong', 'chidinh', 'chongchidinh', 'tacdungphu'] as $field) {
+    foreach (['tensp', 'giaban', 'hinhsp', 'congdung', 'xuatxu', 'cachdung', 'requires_rx', 'madv', 'math', 'mancc', 'mamv', 'madm', 'thanhphan', 'hamluong', 'chidinh', 'chongchidinh', 'tacdungphu'] as $field) {
       if (isset($data[$field])) {
         $fields[] = "$field = ?";
         $params[] = $data[$field];
