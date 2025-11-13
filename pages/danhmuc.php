@@ -249,6 +249,12 @@ if (!empty($product_mamv_ids)) {
         color: #777;
         margin: 4px 0 0 0;
     }
+
+    /* Thêm style cho loading để thấy hiệu ứng khi lọc */
+    .product-grid.loading {
+        opacity: 0.5;
+        pointer-events: none;
+    }
     
 </style>
 <link rel="stylesheet" href="static/css/product.css">
@@ -399,6 +405,10 @@ if (!empty($product_mamv_ids)) {
 </div>
 
 <script>
+    // Định nghĩa allProducts và baseUrl
+    const allProducts = <?= json_encode($products) ?>;
+    const baseUrl = '<?= $base_url ?>';
+
     // Hàm thêm vào giỏ hàng
     function addToCart(masp, event) {
         event.preventDefault();
@@ -416,9 +426,7 @@ if (!empty($product_mamv_ids)) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Hiển thị thông báo thành công
                 alert(data.message || 'Đã thêm vào giỏ hàng!');
-                // Reload trang để cập nhật số lượng giỏ hàng
                 location.reload();
             } else {
                 alert(data.message || 'Có lỗi xảy ra!');
@@ -430,11 +438,16 @@ if (!empty($product_mamv_ids)) {
         });
     }
 
-    // Lắng nghe sự kiện lọc sản phẩm
+    // Logic lọc sản phẩm (client-side)
     document.addEventListener('DOMContentLoaded', function() {
         const filterPanel = document.getElementById('filter-panel');
         const productGrid = document.getElementById('product-grid');
         const productCountNote = document.getElementById('product-count-note');
+
+        if (!allProducts) {
+            console.error('allProducts not defined!');
+            return;
+        }
 
         filterPanel.addEventListener('change', function(event) {
             if (event.target.tagName === 'INPUT') {
@@ -445,45 +458,119 @@ if (!empty($product_mamv_ids)) {
         function applyFilters() {
             productGrid.classList.add('loading');
 
-            const formData = new FormData();
-            const categoryIds = productGrid.dataset.categoryIds;
-            formData.append('category_ids', categoryIds);
+            const priceRange = document.querySelector('input[name="price_range"]:checked')?.value || 'all';
 
-            const priceRange = document.querySelector('input[name="price_range"]:checked');
-            if (priceRange) {
-                formData.append('price_range', priceRange.value);
+            const selectedBrands = Array.from(document.querySelectorAll('input[name="brand[]"]:checked')).map(cb => parseInt(cb.value));
+
+            const selectedDoituong = Array.from(document.querySelectorAll('input[name="doituong[]"]:checked')).map(cb => cb.value);
+
+            const selectedMuivi = Array.from(document.querySelectorAll('input[name="muivi[]"]:checked')).map(cb => parseInt(cb.value));
+
+            let filtered = allProducts.filter(product => {
+                const finalPrice = calculateFinalPrice(product);
+                let priceMatch = true;
+                if (priceRange !== 'all') {
+                    const [min, max] = priceRange.split('-').map(Number);
+                    priceMatch = finalPrice >= min && (isNaN(max) ? true : finalPrice <= max);
+                }
+
+                const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(parseInt(product.math || 0));
+
+                let doituongData = [];
+                try {
+                    doituongData = JSON.parse(product.doituong || '[]');
+                } catch(e) {}
+                const doituongMatch = selectedDoituong.length === 0 || selectedDoituong.some(dt => doituongData.includes(dt));
+
+                const muiviMatch = selectedMuivi.length === 0 || selectedMuivi.includes(parseInt(product.mamv || 0));
+
+                return priceMatch && brandMatch && doituongMatch && muiviMatch;
+            });
+
+            let html = '';
+            if (filtered.length === 0) {
+                html = '<p>Không tìm thấy sản phẩm phù hợp.</p>';
+            } else {
+                filtered.forEach(product => {
+                    const giaban = parseFloat(product.giaban || 0);
+                    let final_price = giaban;
+                    let discount_percent = 0;
+                    if (product.makm) {
+                        if (product.phantram_giam > 0) {
+                            final_price = giaban * (1 - product.phantram_giam / 100);
+                            discount_percent = parseInt(product.phantram_giam);
+                        } else if (product.gia_giam_co_dinh > 0) {
+                            final_price = Math.max(0, giaban - product.gia_giam_co_dinh);
+                            discount_percent = parseInt(Math.round((product.gia_giam_co_dinh / giaban) * 100));
+                        }
+                    }
+                    const discount_badge = discount_percent > 0 ? `<span class="discount-badge">-${discount_percent}%</span>` : '';
+                    const old_price = discount_percent > 0 ? `<span class="old-price">${moneyVn(giaban)}đ</span>` : '';
+                    const imageSrc = getImageSrc(product.hinhsp);
+
+                    html += `
+                        <div class="product-card" data-masp="${product.masp}">
+                            <a href="${baseUrl}/base.php?page=detailsproducts&masp=${encodeURIComponent(product.masp)}">
+                                ${discount_badge}
+                                <img src="${imageSrc}" alt="${escapeHtml(product.tensp)}">
+                                <h3>${escapeHtml(product.tensp)}</h3>
+                                <p class="price">
+                                    ${moneyVn(final_price)} đ
+                                    ${old_price}
+                                </p>
+                            </a>
+                            <button class="btn-buy" onclick="addToCart(${product.masp}, event)">
+                                <i class="fas fa-cart-plus"></i> Chọn mua
+                            </button>
+                        </div>
+                    `;
+                });
             }
 
-            const checkedBrands = document.querySelectorAll('input[name="brand[]"]:checked');
-            checkedBrands.forEach(checkbox => {
-                formData.append('brand[]', checkbox.value);
-            });
+            productGrid.innerHTML = html;
+            productCountNote.innerHTML = `Tìm thấy ${filtered.length} sản phẩm.`;
+            productGrid.classList.remove('loading');
+        }
 
-            const checkedDoituong = document.querySelectorAll('input[name="doituong[]"]:checked');
-            checkedDoituong.forEach(checkbox => {
-                formData.append('doituong[]', checkbox.value);
-            });
+        function calculateFinalPrice(product) {
+            const giaban = parseFloat(product.giaban || 0);
+            let final = giaban;
+            if (product.makm) {
+                if (product.phantram_giam > 0) {
+                    final = giaban * (1 - product.phantram_giam / 100);
+                } else if (product.gia_giam_co_dinh > 0) {
+                    final = Math.max(0, giaban - product.gia_giam_co_dinh);
+                }
+            }
+            return final;
+        }
 
-            const checkedMuivi = document.querySelectorAll('input[name="muivi[]"]:checked');
-            checkedMuivi.forEach(checkbox => {
-                formData.append('muivi[]', checkbox.value);
-            });
+        function moneyVn(price) {
+            return new Intl.NumberFormat('vi-VN', {minimumFractionDigits: 0}).format(price).replace(/\./g, '.');
+        }
 
-            fetch('pages/filter_products.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                productGrid.innerHTML = data.html;
-                productCountNote.innerHTML = `Tìm thấy ${data.count} sản phẩm.`;
-                productGrid.classList.remove('loading');
-            })
-            .catch(error => {
-                console.error('Lỗi khi lọc sản phẩm:', error);
-                productGrid.innerHTML = '<p>Đã xảy ra lỗi khi tải sản phẩm.</p>';
-                productGrid.classList.remove('loading');
-            });
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function getImageSrc(imagePath) {
+            imagePath = (imagePath || '').trim();
+            if (imagePath === '') {
+                return baseUrl + '/static/img/placeholder.jpg';
+            }
+            if (/^https?:\/\//i.test(imagePath)) {
+                return imagePath;
+            }
+            let normalized = imagePath.replace(/^\/+/, '');
+            if (normalized.startsWith('Pharmacy-management/')) {
+                normalized = normalized.slice('Pharmacy-management/'.length);
+            }
+            return baseUrl + '/' + normalized;
         }
     });
 </script>
