@@ -214,7 +214,7 @@ render_pills_effect_assets();
                                 <div class="cart-dropdown-footer">
                                     <div class="cart-summary">
                                         <span class="cart-total-items"><?= $cart_count ?> sản phẩm</span>
-                                        <a href="<?= $base_url ?>/base.php?page=cart" class="btn-view-cart">Xem giỏ hàng</a>
+                                        <a href="<?= $base_url ?>/pages/giohang.php#" class="btn-view-cart">Xem giỏ hàng</a>
                                     </div>
                                 </div>
                             <?php endif; ?>
@@ -438,7 +438,7 @@ render_pills_effect_assets();
     }
     
     .btn-view-cart {
-        background-color: #004aad; color: white;
+        background-color: #88afe1ff; color: white;
         padding: 10px 24px; border-radius: 6px;
         font-size: 14px; font-weight: 600;
         transition: background-color 0.3s;
