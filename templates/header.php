@@ -169,7 +169,7 @@ render_pills_effect_assets();
                     <?php endif; ?>
                 </a>
                 
-                                <!-- DROPDOWN GI? H?NG -->
+                                <!-- DROPDOWN Giỏ HÀNG -->
                 <div class="cart-dropdown">
                     <div class="cart-dropdown-surface effect-pills-container" data-effect-fallback-width="380" data-effect-fallback-height="320">
                         <div class="effect-pills-content">
@@ -181,7 +181,7 @@ render_pills_effect_assets();
                                 <?php if (empty($cart_items)): ?>
                                     <div class="cart-empty">
                                         <i class="fas fa-shopping-cart"></i>
-                                        <p>Gi? h?ng tr?ng</p>
+                                        <p>Giỏ hàng của bạn đang trống</p>
                                     </div>
                                 <?php else: ?>
                                     <?php foreach ($cart_items as $item): ?>
@@ -388,12 +388,30 @@ render_pills_effect_assets();
     .cart-item:hover { background-color: #f9f9f9; }
     
     .cart-item-img {
-        flex-shrink: 0; width: 56px; height: 56px;
-        border: 1px solid #e0e0e0; border-radius: 4px;
-        overflow: hidden; display: flex; align-items: center; justify-content: center;
-    }
+    flex-shrink: 0; 
+    width: 56px;                /* <--- 1. Kích thước chiều rộng */
+    height: 56px;               /* <--- 2. Kích thước chiều cao */
+    border: 1px solid #e0e0e0;  /* <--- 3. Đường viền */
+    border-radius: 4px;         /* <--- 4. Độ bo góc */
+    overflow: hidden; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+}
     
-    .cart-item-img img { width: 100%; height: 100%; object-fit: cover; }
+    /* .cart-item-img img { width: 100%; height: 100%; object-fit: cover; } */
+    .cart-item-img img {
+    /* Đảm bảo ảnh không bị margin lạ */
+    margin: 0; 
+    
+    /* Giúp ảnh co giãn vừa vặn bên trong khung */
+    max-width: 90%;
+    max-height: 100%;
+    
+    /* Giữ đúng tỷ lệ ảnh, không bị méo */
+    object-fit: contain; 
+    transform: translateX(-4px); /* <-- Thử thay đổi số -2px này (ví dụ -3px, -4px) */
+}
     
     .cart-item-info { flex-grow: 1; min-width: 0; }
     
