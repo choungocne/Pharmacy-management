@@ -1,3 +1,12 @@
+<?php
+// Kết nối CSDL để header/footer dùng lại được
+if (!function_exists('pdo')) {
+    require_once __DIR__ . '/../db.php'; // ../ vì giohang.php nằm trong thư mục pages
+}
+
+// Đặt base_url giống các trang khác
+$base_url = '/Pharmacy-management';
+?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -219,7 +228,8 @@
     </style>
 </head>
 <body class="text-gray-800">
-
+    <!-- include header nhé -->
+        <?php include __DIR__ . '/../templates/header.php'; ?>
     <!-- 
     HIỆU ỨNG NỀN CANVAS (SAO CHÉP TỪ LOGIN.PHP)
     -->
@@ -1283,6 +1293,6 @@
         }); // *** FIX: Đóng DOMContentLoaded ***
     </script>
     <!-- === KẾT THÚC SCRIPT MODAL === -->
-
+        <?php include __DIR__ . '/../templates/footer.php'; ?>
 </body>
 </html>
