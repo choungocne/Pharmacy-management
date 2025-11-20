@@ -1,5 +1,11 @@
 <?php
 // Cấu hình PDO
+// define('DB_HOST','103.139.203.43:887');
+// define('DB_PORT', 3306);
+// define('DB_NAME','sql_nhom31_itimi');
+// define('DB_USER','root');
+// define('DB_PASS','717a636a41b2e');
+
 define('DB_HOST','127.0.0.1');
 define('DB_NAME','nhathuocantam');
 define('DB_USER','root');
