@@ -1,14 +1,29 @@
 <?php
-// Đặt các giá trị mặc định
+// Base URL (gi? l?i bi?n c? s?n n?u ?? khai b?o n?i kh?c)
+$base_url = $base_url ?? '/Pharmacy-management';
+
+// L?y file hi?n t?i v? tab hi?n t?i
+$current_file = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
+$current_tab  = $_GET['tab'] ?? null;
+
+/**
+ * Tr? v? class active n?u ??ng file v? (tu? ch?n) ??ng tab.
+ * - $file: t?n file PHP, v? d? 'management.php'
+ * - $tab:  null n?u kh?ng c?n so tab; ho?c 'product' / 'meta' ...
+ */
+function admin_active_if(string $file, ?string $tab = null): string {
+    global $current_file, $current_tab;
+    if ($current_file !== $file) return '';
+    if ($tab !== null && $current_tab !== $tab) return '';
+    return ' active bg-sky-100 text-sky-700 font-semibold';
+}
+
+// ??t c?c gi? tr? m?c ??nh
 if (!isset($page_title)) {
-    $page_title = 'Quản Trị - Nhà Thuốc An Tâm';
+    $page_title = 'Qu?n Tr? - Nh? Thu?c An T?m';
 }
 if (!isset($active)) {
     $active = 'home';
-}
-// Hàm tiện ích để gán class active cho menu
-function is_active($current_page, $page_name) {
-    return $current_page === $page_name ? ' active' : '';
 }
 ?>
 <!DOCTYPE html>
@@ -52,10 +67,24 @@ function is_active($current_page, $page_name) {
         .dashboard-card { 
             transition: all 0.3s ease-in-out; 
         }
-        .dashboard-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 10px 20px -5px rgba(0,0,0,0.1);
-        }
+    .dashboard-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 10px 20px -5px rgba(0,0,0,0.1);
+    }
+    </style>
+    <style>
+      /* Dự phòng: nếu project chưa có style cho .active ở sidebar */
+      .active {
+        background-color:#e0f2fe;
+        color:#075985;
+        font-weight:600;
+      }
+      .sidebar a.active,
+      nav a.active {
+        background-color: #e0f2fe; /* sky-100 */
+        color: #075985;            /* sky-700 */
+        font-weight: 600;
+      }
     </style>
 </head>
 <body class="bg-slate-50 text-gray-800">
@@ -153,14 +182,14 @@ function is_active($current_page, $page_name) {
       </div>
       <nav class="mt-6 flex-1 overflow-y-auto">
         <ul class="space-y-2" id="nav-menu">
-            <li><a href="index.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'home'); ?>">Trang chủ</a></li>
-            <li><a href="orders.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'orders'); ?>">Danh sách Đơn hàng</a></li>
-            <li><a href="dashboard.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'dashboard'); ?>">Dashboard</a></li>
-            <li><a href="products.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'products'); ?>">Quản lý Sản phẩm</a></li>
-            <li><a href="management.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'management'); ?>">Quản lý DVT, DM, TH</a></li>
-            <li><a href="create-order.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'create-order'); ?>">Tạo Đơn hàng</a></li>
-            <li><a href="staff.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?php echo is_active($active, 'staff'); ?>">Quản lý Nhân viên</a></li>
-        </ul>
+            <li><a href="<?= $base_url ?>/admin/index.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('index.php'); ?>">Trang Chủ</a></li>
+            <li><a href="<?= $base_url ?>/admin/orders.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('orders.php'); ?>">Danh Sách Đơn Hàng</a></li>
+            <li><a href="<?= $base_url ?>/admin/dashboard.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('dashboard.php'); ?>">Dashboard</a></li>
+            <li><a href="<?= $base_url ?>/admin/management.php?tab=product" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('management.php','product'); ?>">Quản Lý Sản Phẩm</a></li>
+            <li><a href="<?= $base_url ?>/admin/management.php?tab=meta" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('management.php','meta'); ?>">Quản lý DVT, DM, TH</a></li>
+            <!-- <li><a href="<?= $base_url ?>/admin/create-order.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('create-order.php'); ?>">T?o Don h?ng</a></li> -->
+            <li><a href="<?= $base_url ?>/admin/staff.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('staff.php'); ?>">Quản Lý Nhân Viên</a></li>
+</ul>
       </nav>
       <div class="mt-auto p-2">
         <button class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-red-500 bg-red-100/50 hover:bg-red-100 transition-colors">
