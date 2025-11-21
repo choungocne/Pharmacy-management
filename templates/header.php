@@ -13,6 +13,14 @@ require_once __DIR__ . '/effect.php';
 // --- THIẾT LẬP BASE URL ---
 $base_url = '/Pharmacy-management'; 
 
+// Detect "big cart" page (pages/giohang.php or base.php?page=giohang)
+if (!isset($IS_CART_PAGE)) {
+    $curScript = $_SERVER['SCRIPT_NAME'] ?? '';
+    $isByPath  = (strpos($curScript, '/pages/giohang.php') !== false);
+    $isByParam = (($_GET['page'] ?? '') === 'giohang');
+    $IS_CART_PAGE = $isByPath || $isByParam;
+}
+
 // --- Lấy danh mục cấp 1 ---
 $pdo = pdo();
 $sql_lv1 = "SELECT * FROM danhmuc WHERE cap = 1 ORDER BY madm";
@@ -128,6 +136,13 @@ $cart_count = count($cart_items);
 render_pills_effect_assets();
 ?>
 
+<?php if (!empty($IS_CART_PAGE)): ?>
+<style>
+/* Hard kill mini-cart on big cart page */
+#mini-cart, .mini-cart, .header-cart-popover { display:none !important; }
+</style>
+<?php endif; ?>
+
 <div class="header-bar">
     <div class="header-bar-content">
         <div class="header-bar-left">
@@ -162,13 +177,18 @@ render_pills_effect_assets();
             
             <!-- GIỎ HÀNG MINI -->
             <div class="cart-wrapper">
-                <a href="<?= $base_url ?>/base.php?page=cart" class="cart-trigger">
+                <a href="<?= $base_url ?>/base.php?page=cart"
+                   <?php if (!empty($IS_CART_PAGE)): ?>
+                    aria-disabled="true" style="pointer-events:none;cursor:default;"
+                   <?php endif; ?>
+                   class="cart-trigger">
                     <i class="fas fa-shopping-cart"></i> Giỏ hàng
                     <?php if ($cart_count > 0): ?>
                         <span class="cart-badge"><?= $cart_count ?></span>
                     <?php endif; ?>
                 </a>
                 
+                <?php if (empty($IS_CART_PAGE)): ?>
                                 <!-- DROPDOWN Giỏ HÀNG -->
                 <div class="cart-dropdown">
                     <div class="cart-dropdown-surface effect-pills-container" data-effect-fallback-width="380" data-effect-fallback-height="320">
@@ -221,6 +241,7 @@ render_pills_effect_assets();
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
             
             <a href="#"><i class="fas fa-headset"></i> Hỗ trợ</a>
@@ -548,5 +569,12 @@ function removeFromCart(id) {
     }
 }
 </script>
+
+<?php if (!empty($IS_CART_PAGE)): ?>
+<script>
+  window.IS_BIG_CART_PAGE = true;
+  document.documentElement.classList.add('is-cart-page');
+</script>
+<?php endif; ?>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

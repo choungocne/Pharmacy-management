@@ -1583,3 +1583,14 @@ footer {
   color: #007bff;
   font-weight: 500;
 }
+
+/* Tắt mọi hiển thị mini-cart khi đang ở trang giỏ hàng lớn */
+.is-cart-page #mini-cart,
+.is-cart-page .mini-cart,
+.is-cart-page .cart-mini,
+.is-cart-page .header-cart-popover { display: none !important; }
+
+.is-cart-page [data-mini-cart-trigger],
+.is-cart-page .js-mini-cart-trigger,
+.is-cart-page .header .cart,
+.is-cart-page .header .cart-icon { pointer-events: none !important; cursor: default !important; }

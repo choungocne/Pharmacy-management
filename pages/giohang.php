@@ -6,6 +6,14 @@ if (!function_exists('pdo')) {
 
 include __DIR__ . '/../templates/header.php';
 
+?>
+<!-- Flag để tắt mini-cart trên trang giỏ hàng lớn -->
+<script>
+  window.IS_BIG_CART_PAGE = true;
+  // Thêm class để có thể ẩn mini-cart bằng CSS dự phòng
+  document.documentElement.classList.add('is-cart-page');
+</script>
+<?php
 // Đặt base_url giống các trang khác
 $base_url = '/Pharmacy-management';
 ?>
