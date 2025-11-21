@@ -4,6 +4,8 @@ if (!function_exists('pdo')) {
     require_once __DIR__ . '/../db.php'; // ../ vì giohang.php nằm trong thư mục pages
 }
 
+include __DIR__ . '/../templates/header.php';
+
 // Đặt base_url giống các trang khác
 $base_url = '/Pharmacy-management';
 ?>
@@ -227,12 +229,9 @@ $base_url = '/Pharmacy-management';
 
     </style>
 </head>
+
 <body class="text-gray-800">
-    <!-- include header nhé -->
-        <?php include __DIR__ . '/../templates/header.php'; ?>
-    <!-- 
-    HIỆU ỨNG NỀN CANVAS (SAO CHÉP TỪ LOGIN.PHP)
-    -->
+    
     <canvas id="pills-canvas"></canvas>
     
     <!-- 
@@ -270,42 +269,8 @@ $base_url = '/Pharmacy-management';
                             </p>
                         </div>
                         
-                        <!-- Dữ liệu mẫu 1 -->
-                        <div class="flex items-start gap-4 py-4 border-b border-gray-200">
-                            <img src="https://placehold.co/100x100/e0f2fe/0284c7?text=An+Tam" alt="Sản phẩm 1" class="w-24 h-24 rounded-lg border border-gray-200 object-cover">
-                            <div class="flex-grow">
-                                <h3 class="font-medium text-gray-800">Dung dịch Feginic bổ sung sắt cho người thiếu máu (4 vỉ x 5 ống x 5ml)</h3>
-                                <p class="text-sm text-gray-500">Hàng chính hãng</p>
-                                <div class="flex items-center justify-between mt-2">
-                                    <div>
-                                        <span class="font-semibold text-lg" style="color: var(--primary-color);">108.000đ</span>
-                                        <span class="text-gray-400 line-through ml-2">120.000đ</span>
-                                    </div>
-                                    <input type="number" value="1" min="1" max="10" class="login-input w-20 text-center py-1 px-2">
-                                </div>
-                            </div>
-                            <button class="text-gray-400 hover:text-red-500 transition-colors">
-                                <i class="fas fa-trash-alt fa-lg"></i>
-                            </button>
-                        </div>
+                        <div id="list-cart-item"></div>
                         
-                        <!-- Dữ liệu mẫu 2 -->
-                        <div class="flex items-start gap-4 py-4">
-                            <img src="https://placehold.co/100x100/e0f2fe/0284c7?text=An+Tam" alt="Sản phẩm 2" class="w-24 h-24 rounded-lg border border-gray-200 object-cover">
-                            <div class="flex-grow">
-                                <h3 class="font-medium text-gray-800">Thuốc Alpha-Chymotrypsin Euvipharm điều trị phù nề (2 vỉ x 10 viên)</h3>
-                                <p class="text-sm text-gray-500">Hàng chính hãng</p>
-                                <div class="flex items-center justify-between mt-2">
-                                    <div>
-                                        <span class="font-semibold text-lg" style="color: var(--primary-color);">99.000đ</span>
-                                    </div>
-                                    <input type="number" value="2" min="1" max="10" class="login-input w-20 text-center py-1 px-2">
-                                </div>
-                            </div>
-                            <button class="text-gray-400 hover:text-red-500 transition-colors">
-                                <i class="fas fa-trash-alt fa-lg"></i>
-                            </button>
-                        </div>
                     </div>
 
                     <!-- Card 2: Thông tin nhận hàng -->
@@ -833,15 +798,15 @@ $base_url = '/Pharmacy-management';
                         <div class="space-y-2 text-base">
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Tạm tính:</span>
-                                <span class="font-medium">207.000đ</span>
+                                <span id="tam-tinh" class="font-medium">207.000đ</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Giảm giá trực tiếp:</span>
-                                <span class="font-medium text-green-600">0đ</span>
+                                <span id="giam-truc-tiep" class="font-medium text-green-600">0đ</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Giảm giá voucher:</span>
-                                <span class="font-medium text-green-600">0đ</span>
+                                <span id="giam-voucher" class="font-medium text-green-600">0đ</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Phí vận chuyển:</span>
@@ -1293,6 +1258,133 @@ $base_url = '/Pharmacy-management';
         }); // *** FIX: Đóng DOMContentLoaded ***
     </script>
     <!-- === KẾT THÚC SCRIPT MODAL === -->
+        
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const BASE_URL = '<?= $base_url ?>';
+            const listCart = document.getElementById('list-cart-item');
+            const cartRows = <?= json_encode($cart_rows ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+
+            // Helpers
+            const vn = n => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + 'đ';
+            const $ = s => document.querySelector(s);
+
+            function renderCartItems() {
+                if (!listCart || !Array.isArray(cartRows)) return;
+                listCart.innerHTML = '';
+
+                cartRows.forEach((sp, index) => {
+                    const cartId = typeof sp?.id !== 'undefined' ? sp.id : '';
+                    const rawQuantity = typeof sp?.cart_quantity !== 'undefined' ? parseInt(sp.cart_quantity, 10) : 1;
+                    const safeQuantity = Math.max(1, Math.min(100, isNaN(rawQuantity) ? 1 : rawQuantity));
+                    const priceText = vn(sp && typeof sp.giaban !== 'undefined' ? sp.giaban : 0);
+                    const imageSrc = sp && sp.hinhsp ? sp.hinhsp : '';
+                    const productName = sp && sp.tensp ? sp.tensp : '';
+
+                    const itemHTML = `
+                        <div class="flex items-start gap-4 py-4 border-b border-gray-200 cart-item cart-item${index + 1}" data-cart-id="${cartId}">
+                            <img src="${imageSrc}" alt="${productName}" class="w-24 h-24 rounded-lg border border-gray-200 object-cover">
+                            <div class="flex-grow space-y-2">
+                                <h3 class="font-medium text-gray-800">${productName}</h3>
+                                <div class="flex items-center justify-between gap-4">
+                                    <span class="font-semibold text-lg" style="color: var(--primary-color);">${priceText}</span>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" class="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:text-gray-800 btn-change-qty" data-delta="-1">-</button>
+                                        <input type="number" class="login-input w-20 text-center py-1 px-2 cart-qty-input" value="${safeQuantity}" min="1" max="100">
+                                        <button type="button" class="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:text-gray-800 btn-change-qty" data-delta="1">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="text-gray-400 hover:text-red-500 transition-colors" onclick="removeFromCart(${cartId})">
+                                <i class="fas fa-trash-alt fa-lg"></i>
+                            </button>
+                        </div>
+                    `;
+                    listCart.insertAdjacentHTML('beforeend', itemHTML);
+                });
+            }
+
+            // Cập nhật phần tóm tắt đơn hàng từ JSON backend
+            function renderSummary(sum) {
+                if (!sum) return;
+                const sub = $('#tam-tinh');
+                const gtr = $('#giam-truc-tiep');
+                const gvc = $('#giam-voucher');
+                const ship = $('#phi-van-chuyen');
+                const ttl = $('#thanh-tien');
+
+                if (sub)  sub.textContent  = vn(sum.subtotal || 0);
+                if (gtr)  gtr.textContent  = sum.discount_direct  ? ('-' + vn(sum.discount_direct))  : '0đ';
+                if (gvc)  gvc.textContent  = sum.discount_voucher ? ('-' + vn(sum.discount_voucher)) : '0đ';
+                if (ship) ship.textContent = (sum.shipping === 0) ? 'Miễn phí' : vn(sum.shipping || 0);
+                if (ttl)  ttl.textContent  = vn(sum.grand_total || 0);
+            }
+
+            // Gọi API update quantity
+            function postUpdateQuantity(id, quantity) {
+                const body = new URLSearchParams({ action: 'update_quantity', id: String(id), quantity: String(quantity) });
+                return fetch(`${BASE_URL}/cart_handler.php`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    body: body.toString()
+                }).then(r => r.json());
+            }
+
+            renderCartItems();
+            if (!listCart) return;
+
+            // Khi click nút +/- (đã có đoạn lắng nghe trước đó, nếu chưa thì thêm)
+            listCart.addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-change-qty');
+                if (!btn) return;
+
+                const wrapper = btn.closest('.cart-item');
+                const input   = wrapper?.querySelector('.cart-qty-input');
+                const id      = wrapper?.getAttribute('data-cart-id'); // id dòng giỏ
+
+                if (!input || !id) return;
+
+                const delta = parseInt(btn.dataset.delta || '0', 10);
+                let val = parseInt(input.value || '1', 10) + delta;
+                val = Math.max(1, Math.min(100, val));
+                input.value = val;
+
+                postUpdateQuantity(id, val).then(json => {
+                    if (json && json.success) {
+                        renderSummary(json);
+                        if (typeof viewCart === 'function') viewCart(); // refresh mini cart nếu có
+                    }
+                }).catch(console.error);
+            });
+
+            // Khi user gõ số trực tiếp
+            listCart.addEventListener('change', (e) => {
+                const input = e.target.closest('.cart-qty-input');
+                if (!input) return;
+
+                const wrapper = input.closest('.cart-item');
+                const id = wrapper?.getAttribute('data-cart-id');
+                if (!id) return;
+
+                let val = parseInt(input.value || '1', 10);
+                val = Math.max(1, Math.min(100, val));
+                input.value = val;
+
+                postUpdateQuantity(id, val).then(json => {
+                    if (json && json.success) {
+                        renderSummary(json);
+                        if (typeof viewCart === 'function') viewCart();
+                    }
+                }).catch(console.error);
+            });
+
+            // Load tổng tiền lần đầu (nếu cần)
+            fetch(`${BASE_URL}/cart_handler.php?action=view`)
+              .then(r => r.json())
+              .then(json => { if (json && json.success) renderSummary(json); })
+              .catch(() => {});
+        });
+    </script>
         <?php include __DIR__ . '/../templates/footer.php'; ?>
 </body>
 </html>
