@@ -1,4 +1,7 @@
 <?php
+if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
+if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
+
 // Base URL (gi? l?i bi?n c? s?n n?u ?? khai b?o n?i kh?c)
 $base_url = $base_url ?? '/Pharmacy-management';
 
@@ -176,10 +179,10 @@ if (!isset($active)) {
 <!-- Layout chính của trang -->
 <div class="flex h-screen">
     <aside class="w-64 bg-white/80 backdrop-blur-lg shadow-lg flex flex-col p-4 border-r border-gray-200 z-10">
-      <div class="flex items-center gap-3 px-2 py-4 border-b border-gray-200">
+      <a href="<?= $base_url ?>/" class="flex items-center gap-3 px-2 py-4 border-b border-gray-200">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary-color);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9.5 14.5 1.5 1.5 3.5-3.5"/></svg>
         <h1 class="text-2xl font-bold" style="color: var(--primary-dark);">An Tâm</h1>
-      </div>
+      </a>
       <nav class="mt-6 flex-1 overflow-y-auto">
         <ul class="space-y-2" id="nav-menu">
             <li><a href="<?= $base_url ?>/admin/index.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('index.php'); ?>">Trang Chủ</a></li>
@@ -191,10 +194,21 @@ if (!isset($active)) {
             <li><a href="<?= $base_url ?>/admin/staff.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('staff.php'); ?>">Quản Lý Nhân Viên</a></li>
 </ul>
       </nav>
+      <?php
+        // Đảm bảo có session + CSRF để render form
+        if (session_status() !== PHP_SESSION_ACTIVE) { session_start(); }
+        if (empty($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
+        $base_url = $base_url ?? '/Pharmacy-management';
+      ?>
       <div class="mt-auto p-2">
-        <button class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-red-500 bg-red-100/50 hover:bg-red-100 transition-colors">
+        <form method="POST" action="<?php echo htmlspecialchars($base_url . '/auth/logout.php'); ?>"
+              onsubmit="return confirm('Bạn có chắc muốn đăng xuất?');">
+          <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($_SESSION['csrf']); ?>">
+          <button type="submit"
+            class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg text-red-500 bg-red-100/50 hover:bg-red-100 transition-colors">
             <span>Đăng xuất</span>
-        </button>
+          </button>
+        </form>
       </div>
     </aside>
 
