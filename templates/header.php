@@ -1,17 +1,39 @@
 <?php
+declare(strict_types=1);
 // ==========================================
-// TỆP: header.php
+// Tập: header.php
 // ==========================================
 
-// --- YÊU CẦU KẾT NỐI CSDL VÀ HÀM HỖ TRỢ ---
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_set_cookie_params([
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+    ]);
+    session_start();
+}
+
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+
+$base_url = $base_url ?? '/Pharmacy-management';
+$isLogged = !empty($_SESSION['auth']);
+$username = $isLogged ? ($_SESSION['auth']['username'] ?? 'Tài khoản') : null;
+$roles = $isLogged ? (array)($_SESSION['auth']['roles'] ?? []) : [];
+$isAdmin = $isLogged && (in_array('admin', $roles, true) || !empty($_SESSION['auth']['manv']));
+$auth = $_SESSION['auth'] ?? [];
+$makh = $auth['makh'] ?? ($_SESSION['makh'] ?? null);
+
+// --- YASU Cấu Kết Nối CSDL Và Hàm Hỗ Trợ ---
 if (!function_exists('pdo')) {
-    require_once 'db.php'; 
+    require_once __DIR__ . '/../db.php';
 }
 
 require_once __DIR__ . '/effect.php';
 
 // --- THIẾT LẬP BASE URL ---
-$base_url = '/Pharmacy-management'; 
+$base_url = $base_url ?: '/Pharmacy-management';
 
 // Detect "big cart" page (pages/giohang.php or base.php?page=giohang)
 if (!isset($IS_CART_PAGE)) {
@@ -34,18 +56,12 @@ $href_map = [
     'Thiết bị y tế'       => 'base.php?page=thietbi',
     'Tra cứu bệnh'        => 'base.php?page=search_disease',
     'Bệnh & Góc sức khỏe'=> 'base.php?page=suckhoe',
-    'Hệ thống nhà thuốc'  => 'base.php?page=about'
+    'Hệ thống nhà thuốc'  => 'base.php?page=about',
 ];
 
 // --- Lấy giỏ hàng từ database ---
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-$makh = $_SESSION['makh'] ?? null;
 $session_id = session_id();
 
-// Lấy danh sách sản phẩm trong giỏ hàng
 $sql_cart = "
     SELECT 
         g.id,
@@ -120,7 +136,7 @@ foreach ($cart_rows as $row) {
     $cart_items[] = [
         'id' => (int)$row['id'],
         'masp' => (int)$row['masp'],
-        'name' => $row['tensp'] ?? 'S?n ph?m',
+        'name' => $row['tensp'] ?? 'Sản phẩm',
         'quantity' => $quantity,
         'unit' => $row['tendv'] ?? 'Hộp',
         'giaban' => $final_price,
@@ -173,7 +189,20 @@ render_pills_effect_assets();
             <button type="submit"><i class="fas fa-search"></i></button>
         </form>
         <div class="user-actions">
-            <a href="login.php"><i class="fas fa-user"></i> Đăng nhập</a>
+            <?php if (!$isLogged): ?>
+                <a href="<?= $base_url ?>/login.php"><i class="fas fa-user"></i> Đăng nhập</a>
+                <a href="<?= $base_url ?>/register.php"><i class="fas fa-user-plus"></i> Đăng ký</a>
+            <?php else: ?>
+                <span class="user-name"><i class="fas fa-user"></i> <?= htmlspecialchars($username ?? 'Tài khoản') ?></span>
+                <?php if ($isAdmin): ?>
+                    <a href="<?= $base_url ?>/admin/"><i class="fas fa-gauge-high"></i> Quản trị</a>
+                <?php endif; ?>
+                <form id="logout-form" action="<?= $base_url ?>/logout.php" method="POST" style="display:none;">
+                    <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
+                    <input type="hidden" name="r" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '') ?>">
+                </form>
+                <a href="#" data-logout-btn><i class="fas fa-sign-out-alt"></i> Đăng xuất</a>
+            <?php endif; ?>
             
             <!-- GIỎ HÀNG MINI -->
             <div class="cart-wrapper">
@@ -189,7 +218,7 @@ render_pills_effect_assets();
                 </a>
                 
                 <?php if (empty($IS_CART_PAGE)): ?>
-                                <!-- DROPDOWN Giỏ HÀNG -->
+                <!-- DROPDOWN GIỎ HÀNG -->
                 <div class="cart-dropdown">
                     <div class="cart-dropdown-surface effect-pills-container" data-effect-fallback-width="380" data-effect-fallback-height="320">
                         <div class="effect-pills-content">
@@ -217,9 +246,9 @@ render_pills_effect_assets();
                                                 </a>
                                                 <div class="cart-item-bottom">
                                                     <div class="cart-item-price">
-                                                        <span class="price"><?= number_format($item['giaban'] ?? 0, 0, ',', '.') ?>d</span>
+                                                        <span class="price"><?= number_format($item['giaban'] ?? 0, 0, ',', '.') ?>đ</span>
                                                     </div>
-                                                    <span class="cart-item-quantity">x<?= (int)($item['quantity'] ?? 0) ?> <?= htmlspecialchars($item['unit'] ?? 'H?p') ?></span>
+                                                    <span class="cart-item-quantity">x<?= (int)($item['quantity'] ?? 0) ?> <?= htmlspecialchars($item['unit'] ?? 'Hộp') ?></span>
                                                 </div>
                                             </div>
                                             <button class="cart-item-delete" onclick="removeFromCart(<?= (int)$item['id'] ?>)">
@@ -248,6 +277,10 @@ render_pills_effect_assets();
         </div>
     </div>
 </header>
+
+<?php if (!empty($_GET['logged_out'])): ?>
+<div class="logout-alert" role="status">Bạn đã đăng xuất.</div>
+<?php endif; ?>
 
 <nav class="main-nav">
     <div class="nav-container">
@@ -322,9 +355,10 @@ render_pills_effect_assets();
     .search-bar input { flex-grow: 1; border: none; outline: none; padding: 12px 20px; font-size: 14px; }
     .search-bar button { background-color: #004aad; border: none; color: white; padding: 0 20px; cursor: pointer; }
     
-    .user-actions { display: flex; gap: 25px; font-size: 14px; font-weight: 500; color: #333; }
-    .user-actions > a { display: flex; align-items: center; gap: 8px; transition: color 0.3s; }
+    .user-actions { display: flex; gap: 16px; align-items: center; font-size: 14px; font-weight: 500; color: #333; flex-wrap: wrap; justify-content: flex-end; }
+    .user-actions > a, .user-actions > span { display: flex; align-items: center; gap: 8px; transition: color 0.3s; }
     .user-actions > a:hover { color: #004aad; }
+    .user-name { color: #004aad; font-weight: 600; }
     
     /* === GIỎ HÀNG MINI STYLES === */
     .cart-wrapper { position: relative; }
@@ -409,30 +443,24 @@ render_pills_effect_assets();
     .cart-item:hover { background-color: #f9f9f9; }
     
     .cart-item-img {
-    flex-shrink: 0; 
-    width: 56px;                /* <--- 1. Kích thước chiều rộng */
-    height: 56px;               /* <--- 2. Kích thước chiều cao */
-    border: 1px solid #e0e0e0;  /* <--- 3. Đường viền */
-    border-radius: 4px;         /* <--- 4. Độ bo góc */
-    overflow: hidden; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center;
-}
+        flex-shrink: 0; 
+        width: 56px;
+        height: 56px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+    }
     
-    /* .cart-item-img img { width: 100%; height: 100%; object-fit: cover; } */
     .cart-item-img img {
-    /* Đảm bảo ảnh không bị margin lạ */
-    margin: 0; 
-    
-    /* Giúp ảnh co giãn vừa vặn bên trong khung */
-    max-width: 90%;
-    max-height: 100%;
-    
-    /* Giữ đúng tỷ lệ ảnh, không bị méo */
-    object-fit: contain; 
-    transform: translateX(-4px); /* <-- Thử thay đổi số -2px này (ví dụ -3px, -4px) */
-}
+        margin: 0; 
+        max-width: 90%;
+        max-height: 100%;
+        object-fit: contain; 
+        transform: translateX(-4px);
+    }
     
     .cart-item-info { flex-grow: 1; min-width: 0; }
     
@@ -513,6 +541,18 @@ render_pills_effect_assets();
     }
     .dropdown-item:hover { background-color: #f5f5f5; color: #004aad; }
     .dropdown-item img { width: 24px; height: 24px; object-fit: contain; }
+
+    .logout-alert {
+        width: 90%;
+        max-width: 1400px;
+        margin: 10px auto;
+        padding: 10px 14px;
+        background: #ecfdf3;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        border-radius: 10px;
+        font-size: 14px;
+    }
 </style>
 
 <script>
@@ -553,7 +593,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function removeFromCart(id) {
-    if (confirm('Ban co chac muon xoa san pham nay khoi gio hang?')) {
+    if (confirm('Bạn có chắc muốn xóa sản phẩm này khỏi giỏ hàng?')) {
         fetch('<?= $base_url ?>/cart_handler.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -568,6 +608,16 @@ function removeFromCart(id) {
         .catch(error => console.error('Error:', error));
     }
 }
+</script>
+
+<script>
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-logout-btn]');
+    if (t) {
+      e.preventDefault();
+      document.getElementById('logout-form')?.submit();
+    }
+  });
 </script>
 
 <?php if (!empty($IS_CART_PAGE)): ?>
