@@ -188,10 +188,11 @@ if (!isset($active)) {
             <li><a href="<?= $base_url ?>/admin/index.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('index.php'); ?>">Trang Chủ</a></li>
             <li><a href="<?= $base_url ?>/admin/orders.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('orders.php'); ?>">Danh Sách Đơn Hàng</a></li>
             <li><a href="<?= $base_url ?>/admin/dashboard.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('dashboard.php'); ?>">Dashboard</a></li>
-            <li><a href="<?= $base_url ?>/admin/management.php?tab=product" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('management.php','product'); ?>">Quản Lý Sản Phẩm</a></li>
+            <li><a href="<?= $base_url ?>/admin/products.php?tab=product" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('products.php','product'); ?>">Quản Lý Sản Phẩm</a></li>
             <li><a href="<?= $base_url ?>/admin/management.php?tab=meta" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('management.php','meta'); ?>">Quản lý DVT, DM, TH</a></li>
             <!-- <li><a href="<?= $base_url ?>/admin/create-order.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('create-order.php'); ?>">T?o Don h?ng</a></li> -->
             <li><a href="<?= $base_url ?>/admin/staff.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('staff.php'); ?>">Quản Lý Nhân Viên</a></li>
+            <li><a href="<?= $base_url ?>/admin/taikhoan.php" class="sidebar-item flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700<?= admin_active_if('taikhoan.php'); ?>">Quản Lý Tài Khoản</a></li>
 </ul>
       </nav>
       <?php
