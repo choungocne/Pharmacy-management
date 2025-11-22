@@ -11,6 +11,7 @@ $q  = trim($_GET['q'] ?? '');
 $cap = (int)($_GET['cap'] ?? 0); // Lọc theo cấp danh mục
 $perPage      = max(1,(int)($_GET['per'] ?? 9)); // Số lượng danh mục trên mỗi trang, giống products
 $page         = max(1,(int)($_GET['page'] ?? 1));
+$offset       = ($page - 1) * $perPage;
 
 // Hàm gọi API, giống products.php
 function callAPI($endpoint, $params = []) {
@@ -56,6 +57,7 @@ if ($apiResponse && isset($apiResponse['success']) && $apiResponse['success'] &&
     $totalFiltered = $apiResponse['total'];
     $pages = $apiResponse['pages'];
     $page = $apiResponse['current_page'];
+    $offset = ($page - 1) * $perPage;
     $rows = $apiResponse['data'];
     
     // Xử lý dữ liệu để tương thích
@@ -135,6 +137,10 @@ $parentCats = $pdo->query("SELECT madm, tendm, cap FROM danhmuc WHERE cap IN (1,
 /* helper build url (giống products.php) */
 function build_url($q,$cap,$page,$per){ return htmlspecialchars($_SERVER['PHP_SELF']).'?'.http_build_query(['q'=>$q,'cap'=>$cap,'page'=>$page,'per'=>$per]); }
 ?>
+<?php
+// Tab đang hiển thị: 'product' (Quản lý Sản phẩm) hoặc 'meta' (DVT, DM, TH)
+$ADMIN_TAB = $_GET['tab'] ?? 'product';
+?>
 <!doctype html>
 <html lang="vi">
 <head>
@@ -162,7 +168,11 @@ function build_url($q,$cap,$page,$per){ return htmlspecialchars($_SERVER['PHP_SE
   <main class="flex-1 overflow-y-auto relative z-10">
     <header class="sticky top-0 z-20 glass border-b border-slate-200">
       <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <h1 class="text-3xl font-extrabold tracking-tight">Quản lý danh mục,thương hiệu và đơn vị tính</h1>
+        <h1 class="text-3xl font-extrabold tracking-tight">
+          <?= ($ADMIN_TAB === 'meta')
+                ? 'Qu?n l? danh m?c, th??ng hi?u v? ??n v? t?nh'
+                : 'Qu?n l? S?n ph?m' ?>
+        </h1>
         <div class="flex gap-2 items-center">
         <button onclick="openAddModal()" class="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition flex items-center gap-2">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m7-7H5"/></svg>

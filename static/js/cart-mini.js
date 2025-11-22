@@ -1,5 +1,43 @@
+/* ===== BIG-CART PAGE GUARD: skip toàn bộ mini-cart trên trang giỏ hàng lớn ===== */
+(function () {
+  // Nhận diện trang giỏ hàng lớn bằng flag hoặc path
+  const IS_CART_PAGE =
+    (typeof window !== 'undefined' && window.IS_BIG_CART_PAGE === true) ||
+    (/\/pages\/giohang\.php($|\?)/.test(location.pathname));
+
+  // Ghim biến toàn cục để các đoạn code phía dưới có thể kiểm tra
+  window.__DISABLE_MINI_CART__ = !!IS_CART_PAGE;
+
+  if (!IS_CART_PAGE) return;
+
+  // Ẩn UI mini-cart nếu header đã render
+  document.addEventListener('DOMContentLoaded', function () {
+    ['#mini-cart', '.mini-cart', '.cart-mini', '.header-cart-popover'].forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+      });
+    });
+    // Vô hiệu hóa trigger/icon giỏ
+    document
+      .querySelectorAll('[data-mini-cart-trigger], .js-mini-cart-trigger, .header [data-cart], .header .cart, .header .cart-icon')
+      .forEach(t => {
+        t.style.pointerEvents = 'none';
+        t.style.cursor = 'default';
+        t.setAttribute('aria-disabled', 'true');
+      });
+  });
+
+  // Ghi đè các API điều khiển mini-cart để không làm gì cả
+  window.viewCart = function () {};
+  window.openMiniCart = function () {};
+  window.closeMiniCart = function () {};
+})();
+
 // static/js/cart-mini.js
 (function () {
+  if (window.__DISABLE_MINI_CART__) return;
+
   const BASE_URL = "<?= $base_url ?>";
 
   const $mini   = document.getElementById("miniCart");
@@ -24,6 +62,7 @@
   }
 
   async function viewCart(){
+    if (window.__DISABLE_MINI_CART__) return;
     const js = await api('GET', `${BASE_URL}/cart.php?action=view`);
     const items = js.items || [];
     $count && ($count.textContent = js.count ?? items.length ?? 0);
@@ -54,13 +93,17 @@
   }
 
   async function addToCart(masp, qty){
+    if (window.__DISABLE_MINI_CART__) return;
     // POST, fallback GET handled server-side
     await api('POST', `${BASE_URL}/cart.php?action=add`, `masp=${encodeURIComponent(masp)}&qty=${encodeURIComponent(qty||1)}`);
-    await viewCart();
-    showMini();
+    if (!window.__DISABLE_MINI_CART__) {
+      await viewCart();
+      showMini();
+    }
   }
 
   function showMini(){
+    if (window.__DISABLE_MINI_CART__) return;
     if (!$mini) {
       emitHeaderDropdown();
       return;
@@ -71,38 +114,43 @@
     showMini._t = setTimeout(hideMini, 4000);
   }
   function hideMini(){
+    if (window.__DISABLE_MINI_CART__) return;
     if (!$mini) return;
     $mini.classList.remove('show');
     $mini.hidden = true;
   }
 
   // Global click handler: add-to-cart buttons
-  document.addEventListener('click', (e) => {
-    const addBtn = e.target.closest('.js-add-to-cart');
-    if (addBtn){
-      e.preventDefault();
-      const masp = addBtn.dataset.masp;
-      const qty  = addBtn.dataset.qty || 1;
-      if (masp) addToCart(masp, qty);
-      return;
-    }
-    const rm = e.target.closest('[data-remove-masp]');
-    if (rm){
-      e.preventDefault();
-      const id = rm.dataset.removeMasp;
-      api('POST', `${BASE_URL}/cart.php?action=remove`, `masp=${encodeURIComponent(id)}`).then(viewCart);
-      return;
-    }
-    if (e.target.closest('#cartBtn')){
-      e.preventDefault();
-      viewCart().then(showMini);
-      return;
-    }
-    if (!$mini.contains(e.target) && !e.target.closest('#jsCartTrigger')) hideMini();
-  });
+  if (!window.__DISABLE_MINI_CART__) {
+    document.addEventListener('click', (e) => {
+      const addBtn = e.target.closest('.js-add-to-cart');
+      if (addBtn){
+        e.preventDefault();
+        const masp = addBtn.dataset.masp;
+        const qty  = addBtn.dataset.qty || 1;
+        if (masp) addToCart(masp, qty);
+        return;
+      }
+      const rm = e.target.closest('[data-remove-masp]');
+      if (rm){
+        e.preventDefault();
+        const id = rm.dataset.removeMasp;
+        api('POST', `${BASE_URL}/cart.php?action=remove`, `masp=${encodeURIComponent(id)}`).then(() => {
+          if (!window.__DISABLE_MINI_CART__) viewCart();
+        });
+        return;
+      }
+      if (e.target.closest('#cartBtn')){
+        e.preventDefault();
+        if (!window.__DISABLE_MINI_CART__) viewCart().then(showMini);
+        return;
+      }
+      if (!$mini.contains(e.target) && !e.target.closest('#jsCartTrigger')) hideMini();
+    });
 
-  $close && $close.addEventListener('click', (e)=>{ e.preventDefault(); hideMini(); });
+    $close && $close.addEventListener('click', (e)=>{ e.preventDefault(); hideMini(); });
+  }
 
   // Load count at start
-  if ($mini) viewCart();
+  if (!window.__DISABLE_MINI_CART__ && $mini) viewCart();
 })();
