@@ -847,8 +847,8 @@
                         </div>
 
                         <!-- Nút Hoàn tất (từ login.php) -->
-                        <button class="login-button w-full flex justify-center py-3 px-4 mt-6 text-lg">
-                            HOÀN TẤT
+                        <button type="submit" class="w-full py-3 px-4 mt-6 text-lg bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition shadow-lg hover:shadow-sky-500/50">
+                            TIẾN HÀNH THANH TOÁN
                         </button>
                         <p class="text-xs text-gray-500 text-center mt-3">
                             Bằng việc tiến hành đặt mua hàng, bạn đồng ý với 

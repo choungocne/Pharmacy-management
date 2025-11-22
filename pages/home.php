@@ -93,33 +93,25 @@ $brand_discounts = [
 ];
 // --- 1. Lấy Sản phẩm đang có Deal (Sản phẩm có makm hợp lệ) ---
 // Cập nhật truy vấn Deal: Ưu tiên deal giảm giá cao và deal có giới hạn số lượng
-$sql_deal = "
-    SELECT 
-        sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm,
-        km.tenkm, km.phantram_giam, km.gia_giam_co_dinh, km.soluong_deal_conlai,
-        CASE
-            WHEN km.phantram_giam IS NOT NULL AND km.phantram_giam > 0
-                THEN ROUND(sp.giaban * (1 - km.phantram_giam/100), 0)
-            WHEN km.gia_giam_co_dinh IS NOT NULL AND km.gia_giam_co_dinh > 0
-                THEN GREATEST(0, sp.giaban - km.gia_giam_co_dinh)
-            ELSE sp.giaban
-        END AS gia_sau_giam
-    FROM sanpham sp
-    JOIN danhmuc dm ON sp.madm = dm.madm
-    JOIN khuyenmai km ON sp.makm = km.makm
-    WHERE km.trangthai_deal = 'dang_dien_ra'
-      AND NOW() BETWEEN km.ngay_batdau AND km.ngay_ketthuc
-      AND (km.soluong_deal_conlai IS NULL OR km.soluong_deal_conlai > 0)
-    ORDER BY 
-        gia_sau_giam ASC,
-        km.phantram_giam DESC,
-        sp.masp ASC
-    LIMIT 4
-";
-$deals = pdo()->query($sql_deal)->fetchAll();
-// --- 2. Lấy Sản phẩm bán chạy nhất (Top 4 - Sửa lỗi LIMIT & IN Subquery) ---
-// CHỈ LẤY ID CỦA CÁC SẢN PHẨM BÁN CHẠY NHẤT VÀ KHÔNG SỬ DỤNG JSON_EXTRACT TRONG GROUP BY/ORDER BY
-// Cách an toàn nhất là lấy ID cứng của các sản phẩm có doanh số tốt trong dữ liệu mẫu.
+try {
+    // Truy vấn lấy sản phẩm có khuyến mãi đang diễn ra
+    $sql_deal = "
+        SELECT 
+            sp.masp, sp.tensp, sp.giaban, sp.hinhsp, dm.tendm,
+            km.phantram_giam, km.gia_giam_co_dinh, km.ngay_ketthuc
+        FROM sanpham sp
+        JOIN danhmuc dm ON sp.madm = dm.madm
+        JOIN khuyenmai km ON sp.makm = km.makm
+        WHERE km.trangthai_deal = 'dang_dien_ra'
+          AND NOW() BETWEEN km.ngay_batdau AND km.ngay_ketthuc
+        ORDER BY km.phantram_giam DESC
+        LIMIT 4
+    ";
+    $deal_stmt = pdo()->query($sql_deal);
+    $deals = $deal_stmt ? $deal_stmt->fetchAll() : [];
+} catch (Exception $e) {
+    $deals = [];
+}
 
 $products_banchay_ids = [1, 13, 30, 41]; 
 $id_list = implode(',', $products_banchay_ids);
