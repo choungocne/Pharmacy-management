@@ -1,10 +1,33 @@
 <?php
-// Kết nối CSDL để header/footer dùng lại được
-if (!function_exists('pdo')) {
-    require_once __DIR__ . '/../db.php'; // ../ vì giohang.php nằm trong thư mục pages
+require_once __DIR__ . '/../db.php'; 
+
+try {
+    $pdo = pdo();
+} catch (Exception $e) {
+    echo json_encode([]);
+    exit;
 }
 
-include __DIR__ . '/../templates/header.php';
+// ... (Các code include cũ) ...
+
+// 1. Lấy danh sách Tỉnh/Thành phố từ SQL
+$sql_provinces = "SELECT id, full_name FROM provinces ORDER BY id ASC";
+$stmt_p = pdo()->query($sql_provinces);
+$provinces = $stmt_p->fetchAll(PDO::FETCH_ASSOC);
+
+// 2. Lấy toàn bộ Phường/Xã và gom nhóm theo Tỉnh (để dùng cho JS)
+$sql_wards = "SELECT id, name_with_type, province_id FROM wards";
+$stmt_w = pdo()->query($sql_wards);
+$all_wards = $stmt_w->fetchAll(PDO::FETCH_ASSOC);
+
+// Gom nhóm: [province_id => [danh sách phường]]
+$wards_by_province = [];
+foreach ($all_wards as $w) {
+    $wards_by_province[$w['province_id']][] = $w;
+}
+
+// Chuyển sang JSON để JavaScript đọc được
+$json_wards = json_encode($wards_by_province);
 
 ?>
 <!-- Flag để tắt mini-cart trên trang giỏ hàng lớn -->
@@ -317,11 +340,11 @@ $base_url = '/Pharmacy-management';
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Họ và tên người đặt</label>
-                                    <input type="text" placeholder="Nguyễn Văn A" class="login-input">
+                                    <input type="text" id="buyer-name" placeholder="Nguyễn Văn A" class="login-input">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                                    <input type="text" placeholder="09xxxxxxxx" class="login-input">
+                                    <input type="text" id="buyer-phone" placeholder="09xxxxxxxx" class="login-input">
                                 </div>
                                 <div class="md:col-span-2">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Email (không bắt buộc)</label>
@@ -340,22 +363,11 @@ $base_url = '/Pharmacy-management';
                             </h2>
 
                             <!-- "Trước sáp nhập" / "Sau sáp nhập" -->
-                            <div class="flex items-center gap-6 mb-4">
-                                <label class="flex items-center cursor-pointer">
-                                    <!-- THÊM ID CHO RADIO -->
-                                    <input type="radio" name="sap-nhap" id="radio-truoc-sap-nhap" class="form-radio h-5 w-5" checked>
-                                    <span class="ml-2 text-gray-700">Trước sáp nhập</span>
-                                </label>
-                                <label class="flex items-center cursor-pointer">
-                                    <!-- THÊM ID CHO RADIO -->
-                                    <input type="radio" name="sap-nhap" id="radio-sau-sap-nhap" class="form-radio h-5 w-5">
-                                    <span class="ml-2 text-gray-700">Sau sáp nhập</span>
-                                </label>
-                            </div>
+                            
 
                             <!-- Form địa chỉ - BỌC LẠI BẰNG ID "form-truoc-sap-nhap" -->
                             <div class="space-y-4" id="form-truoc-sap-nhap">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Họ và tên người nhận</label>
                                         <input type="text" placeholder="Nguyễn Văn B" class="login-input">
@@ -366,54 +378,32 @@ $base_url = '/Pharmacy-management';
                                     </div>
                                 </div>
                                 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố</label>
-                                        <select class="login-input">
-                                            <option>Chọn Tỉnh/Thành phố</option>
-                                            <option selected>TP. Hồ Chí Minh</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Quận/Huyện</label>
-                                        <select class="login-input">
-                                            <option>Chọn Quận/Huyện</option>
-                                            <option selected>Quận Bình Thạnh</option>
-                                        </select>
-                                    </div>
-                                </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố</label>
+        <select id="province-select" class="login-input">
+            <option value="">-- Chọn Tỉnh/Thành --</option>
+            <?php foreach ($provinces as $p): ?>
+                <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['full_name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
 
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Phường/Xã</label>
-                                    <select class="login-input">
-                                        <option>Chọn Phường/Xã</option>
-                                        <!-- CẬP NHẬT: THÊM NHIỀU PHƯỜNG -->
-                                        <option selected>Phường 25</option>
-                                        <option>Phường 1</option>
-                                        <option>Phường 2</option>
-                                        <option>Phường 3</option>
-                                        <option>Phường 5</option>
-                                        <option>Phường 6</option>
-                                        <option>Phường 7</option>
-                                        <option>Phường 11</option>
-                                        <option>Phường 12</option>
-                                        <option>Phường 13</option>
-                                        <option>Phường 14</option>
-                                        <option>Phường 15</option>
-                                        <option>Phường 17</option>
-                                        <option>Phường 19</option>
-                                        <option>Phường 21</option>
-                                        <option>Phường 22</option>
-                                        <option>Phường 24</option>
-                                        <option>Phường 26</option>
-                                        <option>Phường 27</option>
-                                        <option>Phường 28</option>
-                                    </select>
-                                </div>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Phường/Xã</label>
+        <select id="ward-select" class="login-input" disabled>
+            <option value="">-- Vui lòng chọn Tỉnh trước --</option>
+        </select>
+    </div>
+</div>
+<div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Nhập địa chỉ chi tiết (số nhà, tên đường)</label>
+    <input type="text" id="ship-address-old" placeholder="Số 2 Võ Oanh" class="login-input">
+</div>
 
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Nhập địa chỉ chi tiết (số nhà, tên đường)</label>
-                                    <input type="text" placeholder="Số 2 Võ Oanh" class="login-input">
+                                    <input type="text" id="ship-address-old" placeholder="Số 2 Võ Oanh" class="login-input">
                                 </div>
 
                                 <div>
@@ -830,7 +820,7 @@ $base_url = '/Pharmacy-management';
                         </div>
 
                         <!-- Nút Hoàn tất (từ login.php) -->
-                        <button type="submit" class="w-full py-3 px-4 mt-6 text-lg bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition shadow-lg hover:shadow-sky-500/50">
+                        <button id="btn-checkout" type="submit" class="w-full py-3 px-4 mt-6 text-lg bg-sky-600 text-white rounded-lg font-bold hover:bg-sky-700 transition shadow-lg hover:shadow-sky-500/50">
                             TIẾN HÀNH THANH TOÁN
                         </button>
                         <p class="text-xs text-gray-500 text-center mt-3">
@@ -860,7 +850,14 @@ $base_url = '/Pharmacy-management';
         </div>
     </div>
 
-
+<form id="hidden-checkout-form" action="checkout.php" method="POST" style="display: none;">
+    <input type="hidden" name="fullname" id="hidden_fullname">
+    <input type="hidden" name="phone" id="hidden_phone">
+    <input type="hidden" name="address" id="hidden_address">
+    <input type="hidden" name="total_amount" id="hidden_total_amount">
+    <input type="hidden" name="payment_method" id="hidden_payment_method">
+    <input type="hidden" name="cart_items" id="hidden_cart_items">
+</form>
     <!-- 
     SCRIPT HIỆU ỨNG NỀN (SAO CHÉP TỪ LOGIN.PHP)
     -->
@@ -1266,7 +1263,52 @@ $base_url = '/Pharmacy-management';
         }); // *** FIX: Đóng DOMContentLoaded ***
     </script>
     <!-- === KẾT THÚC SCRIPT MODAL === -->
-        
+   <script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Dữ liệu Phường/Xã lấy từ PHP (Không cần gọi API)
+    const WARDS_DATA = <?php echo $json_wards; ?>; 
+
+    const provinceSelect = document.getElementById('province-select');
+    const wardSelect = document.getElementById('ward-select');
+
+    // 2. Bắt sự kiện khi chọn Tỉnh
+    if (provinceSelect) {
+        provinceSelect.addEventListener('change', function() {
+            const provinceId = this.value;
+            
+            // Reset ô Phường
+            wardSelect.innerHTML = '<option value="">-- Chọn Phường/Xã --</option>';
+            wardSelect.disabled = true;
+
+            // Nếu có dữ liệu phường của tỉnh này
+            if (provinceId && WARDS_DATA[provinceId]) {
+                const listWards = WARDS_DATA[provinceId];
+
+                // Sắp xếp theo tên (a-z)
+                listWards.sort((a, b) => a.name_with_type.localeCompare(b.name_with_type));
+
+                // Tạo danh sách option
+                let html = '<option value="">-- Chọn Phường/Xã --</option>';
+                listWards.forEach(w => {
+                    html += `<option value="${w.id}">${w.name_with_type}</option>`;
+                });
+
+                wardSelect.innerHTML = html;
+                wardSelect.disabled = false;
+            } else {
+                // Trường hợp tỉnh không có phường (hiếm gặp)
+                if(provinceId) {
+                     wardSelect.innerHTML = '<option value="">-- Không có dữ liệu --</option>';
+                } else {
+                     wardSelect.innerHTML = '<option value="">-- Vui lòng chọn Tỉnh trước --</option>';
+                }
+            }
+        });
+    }
+    
+    // ... (Các phần xử lý nút thanh toán khác giữ nguyên) ...
+});
+</script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const BASE_URL = '<?= $base_url ?>';
@@ -1393,6 +1435,170 @@ $base_url = '/Pharmacy-management';
               .catch(() => {});
         });
     </script>
-        <?php include __DIR__ . '/../templates/footer.php'; ?>
+    <script>
+document.addEventListener('DOMContentLoaded', () => {
+    const btnCheckout = document.getElementById('btn-checkout');
+
+    // Hàm hiển thị lỗi (đổi màu viền input thành đỏ)
+    function showError(elementId) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.classList.add('border-red-500', 'bg-red-50');
+            // Xóa lỗi khi người dùng bắt đầu nhập
+            el.addEventListener('input', () => {
+                el.classList.remove('border-red-500', 'bg-red-50');
+            }, { once: true });
+        }
+    }
+
+    // Hàm kiểm tra số điện thoại đơn giản (VN)
+    function isValidPhone(phone) {
+        const regex = /^(0|\+84)\d{9,10}$/;
+        return regex.test(phone);
+    }
+
+    btnCheckout.addEventListener('click', (e) => {
+        e.preventDefault(); // Chặn hành động mặc định
+        
+        let isValid = true;
+        let firstErrorId = null; // Để scroll tới lỗi đầu tiên
+
+        // 1. Validate thông tin người đặt (Luôn bắt buộc)
+        const buyerName = document.getElementById('buyer-name');
+        const buyerPhone = document.getElementById('buyer-phone');
+
+        if (!buyerName.value.trim()) {
+            showError('buyer-name');
+            isValid = false;
+            if (!firstErrorId) firstErrorId = 'buyer-name';
+        }
+
+        if (!buyerPhone.value.trim() || !isValidPhone(buyerPhone.value.trim())) {
+            showError('buyer-phone');
+            isValid = false;
+            if (!firstErrorId) firstErrorId = 'buyer-phone';
+        }
+
+        // 2. Kiểm tra Tab đang chọn (Giao hàng hay Nhận tại shop)
+        const isDelivery = document.getElementById('btn-giao-hang').classList.contains('tab-active');
+
+        if (isDelivery) {
+            // --- Đang chọn GIAO HÀNG ---
+            // Kiểm tra xem đang dùng form "Trước" hay "Sau" sáp nhập
+            const isTruocSapNhap = document.getElementById('radio-truoc-sap-nhap').checked;
+            const suffix = isTruocSapNhap ? '-old' : '-new';
+
+            const shipNameId = 'ship-name' + suffix;
+            const shipPhoneId = 'ship-phone' + suffix;
+            const shipAddressId = 'ship-address' + suffix;
+
+            const shipName = document.getElementById(shipNameId);
+            const shipPhone = document.getElementById(shipPhoneId);
+            const shipAddress = document.getElementById(shipAddressId);
+
+            if (!shipName.value.trim()) {
+                showError(shipNameId);
+                isValid = false;
+                if (!firstErrorId) firstErrorId = shipNameId;
+            }
+            if (!shipPhone.value.trim() || !isValidPhone(shipPhone.value.trim())) {
+                showError(shipPhoneId);
+                isValid = false;
+                if (!firstErrorId) firstErrorId = shipPhoneId;
+            }
+            if (!shipAddress.value.trim()) {
+                showError(shipAddressId);
+                isValid = false;
+                if (!firstErrorId) firstErrorId = shipAddressId;
+            }
+
+        } else {
+            // --- Đang chọn NHẬN TẠI NHÀ THUỐC ---
+            // Kiểm tra xem đã chọn nhà thuốc chưa (radio name="pharmacy")
+            const pharmacyRadios = document.querySelectorAll('input[name="pharmacy"]:checked');
+            if (pharmacyRadios.length === 0) {
+                alert("Vui lòng chọn nhà thuốc để nhận hàng.");
+                isValid = false;
+            }
+        }
+
+        // 3. Kiểm tra phương thức thanh toán
+        const paymentRadios = document.querySelectorAll('input[name="payment-method"]:checked');
+        if (paymentRadios.length === 0) {
+            alert("Vui lòng chọn phương thức thanh toán.");
+            isValid = false;
+        }
+
+        // XỬ LÝ KẾT QUẢ
+        if (!isValid) {
+        alert("Vui lòng điền đầy đủ thông tin nhận hàng.");
+        if (firstErrorId) {
+            document.getElementById(firstErrorId).focus();
+            document.getElementById(firstErrorId).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    } else {
+        // === CẬP NHẬT MỚI: LẤY DỮ LIỆU VÀ SUBMIT FORM ===
+        
+        // 1. Lấy thông tin cơ bản
+        const finalName = document.getElementById('buyer-name').value;
+        const finalPhone = document.getElementById('buyer-phone').value;
+        
+        // 2. Xử lý địa chỉ (Logic phức tạp tùy vào tab đang chọn)
+        let finalAddress = "";
+        
+        if (isDelivery) {
+            // Đang chọn Giao hàng tận nơi
+            const isTruocSapNhap = document.getElementById('radio-truoc-sap-nhap').checked;
+            const suffix = isTruocSapNhap ? '-old' : '-new';
+            
+            // Lấy các giá trị từ form (giả sử bạn đã đặt ID cho các select tỉnh/huyện/xã là city-old, dist-old...)
+            // Ở đây mình lấy ví dụ lấy từ input địa chỉ chi tiết + text của select
+            const addressDetail = document.getElementById('ship-address' + suffix).value;
+            
+            // Lưu ý: Bạn cần thêm ID cho các thẻ select Tỉnh/Huyện/Xã để lấy text chính xác.
+            // Ví dụ tạm thời lấy địa chỉ chi tiết:
+            finalAddress = addressDetail + " (Giao tận nơi)"; 
+        } else {
+            // Đang chọn Nhận tại nhà thuốc
+            finalAddress = "Nhận tại: Nhà Thuốc An Tâm - 001, P. Thạnh Mỹ Tây";
+        }
+
+        // 3. Lấy tổng tiền (loại bỏ chữ 'đ' và dấu chấm)
+        const totalText = document.getElementById('thanh-tien').textContent;
+        const totalAmount = parseInt(totalText.replace(/\./g, '').replace('đ', ''));
+
+        // 4. Lấy phương thức thanh toán
+        let paymentMethod = 'COD';
+        const paymentChecked = document.querySelector('input[name="payment-method"]:checked');
+        if (paymentChecked) {
+            // Kiểm tra src của ảnh hoặc logic để xác định value
+            const parentLabel = paymentChecked.closest('label');
+            if(parentLabel.innerHTML.includes('MOMO')) paymentMethod = 'MOMO';
+            else if(parentLabel.innerHTML.includes('QR')) paymentMethod = 'QR';
+            else if(parentLabel.innerHTML.includes('VISA')) paymentMethod = 'VISA';
+        }
+
+        // 5. Đổ dữ liệu vào Form ẩn
+        document.getElementById('hidden_fullname').value = finalName;
+        document.getElementById('hidden_phone').value = finalPhone;
+        document.getElementById('hidden_address').value = finalAddress;
+        document.getElementById('hidden_total_amount').value = totalAmount;
+        document.getElementById('hidden_payment_method').value = paymentMethod;
+        
+        // Gửi kèm dữ liệu giỏ hàng (biến cartRows lấy từ PHP ở trên)
+        // Lưu ý: Đảm bảo biến cartRows đã được khai báo trong script render giỏ hàng
+        if (typeof cartRows !== 'undefined') {
+            document.getElementById('hidden_cart_items').value = JSON.stringify(cartRows);
+        }
+
+        // 6. Submit Form
+        btnCheckout.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
+        btnCheckout.disabled = true;
+        
+        document.getElementById('hidden-checkout-form').submit();
+    }
+    });
+});
+</script>
 </body>
 </html>
