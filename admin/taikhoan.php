@@ -67,6 +67,15 @@ function only_first_role_json($code) {
     return json_encode([$code], JSON_UNESCAPED_UNICODE);
 }
 
+/* ==== TÌM KIẾM (nếu đã có thì giữ nguyên) ==== */
+$kw = isset($_GET['q']) ? trim($_GET['q']) : '';
+
+/* ==== SẮP XẾP THEO ID: asc|desc ==== */
+$sort = strtolower($_GET['sort'] ?? 'desc');   // mặc định: id mới nhất trước
+$sort = $sort === 'asc' ? 'asc' : 'desc';      // chống giá trị lạ
+$dir  = $sort === 'asc' ? 'ASC' : 'DESC';      // dùng cho ORDER BY
+$nextSort = $sort === 'asc' ? 'desc' : 'asc';  // trạng thái khi bấm nút
+
 /* ===== XỬ LÝ POST (CREATE/UPDATE/DELETE) ===== */
 $flash = null;
 
@@ -164,7 +173,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $check_csrf()) {
 
     // PRG: tránh submit lại khi refresh
     $_SESSION['flash_taikhoan'] = $flash;
-    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
+    $redirectQS = http_build_query(['q' => $kw, 'sort' => $sort]);
+    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?') . ($redirectQS ? '?' . $redirectQS : ''));
     exit;
 }
 
@@ -175,16 +185,20 @@ if (isset($_SESSION['flash_taikhoan'])) {
 }
 
 /* ===== TRUY VẤN DANH SÁCH ===== */
-$kw = trim($_GET['q'] ?? '');
 if ($kw !== '') {
-    $sql = "SELECT id, username, email, roles, password_hash FROM auth
+    $sql = "SELECT id, username, email, roles, password_hash
+            FROM auth
             WHERE username LIKE :k OR email LIKE :k
-            ORDER BY id DESC";
+            ORDER BY id {$dir}";
     $st  = $pdo->prepare($sql);
-    $st->execute([':k' => "%$kw%"]);
+    $st->execute([':k' => "%{$kw}%"]);
     $rows = $st->fetchAll();
 } else {
-    $rows = $pdo->query("SELECT id, username, email, roles, password_hash FROM auth ORDER BY id DESC")->fetchAll();
+    $rows = $pdo->query(
+        "SELECT id, username, email, roles, password_hash
+         FROM auth
+         ORDER BY id {$dir}"
+    )->fetchAll();
 }
 
 /* ===== TIÊU ĐỀ & HEADER LAYOUT ===== */
@@ -208,11 +222,16 @@ $userName = $_SESSION['auth']['username'] ?? 'Admin';
           <input name="q" value="<?=htmlspecialchars($kw)?>" type="search" placeholder="Tìm theo username/email..."
                  class="pl-10 pr-4 py-2 w-72 border border-gray-300 rounded-full bg-white shadow-sm focus:ring-2 focus:outline-none transition"
                  style="--tw-ring-color: var(--primary-color)">
+          <input type="hidden" name="sort" value="<?=htmlspecialchars($sort)?>">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
         </form>
+        <a href="?<?= http_build_query(['q' => $kw, 'sort' => $nextSort]) ?>"
+           class="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100">
+           Sắp xếp ID: <?= $sort === 'asc' ? '↑ thấp→cao' : '↓ cao→thấp' ?>
+        </a>
         <button id="btn-open-create"
                 class="px-4 py-2 rounded-lg text-white font-medium shadow"
                 style="background: var(--primary-color);">Thêm tài khoản</button>
@@ -230,7 +249,12 @@ $userName = $_SESSION['auth']['username'] ?? 'Admin';
         <table class="min-w-full text-left">
           <thead>
             <tr class="text-gray-500 border-b">
-              <th class="py-3 pr-4">ID</th>
+              <th class="py-3 pr-4">
+                <a href="?<?= http_build_query(['q' => $kw, 'sort' => $nextSort]) ?>"
+                   class="flex items-center gap-1 hover:underline">
+                   ID <?= $sort === 'asc' ? '▲' : '▼' ?>
+                </a>
+              </th>
               <th class="py-3 pr-4">Username</th>
               <th class="py-3 pr-4">Email</th>
               <th class="py-3 pr-4">Vai trò</th>
