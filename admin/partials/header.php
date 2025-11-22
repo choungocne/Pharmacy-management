@@ -51,6 +51,22 @@ if (!isset($active)) {
             background-color: #f8fafc;
             color: var(--text-primary);
         }
+        .dark {
+            --bg-surface: #0f172a;
+            --bg-surface-muted: rgba(15,23,42,0.8);
+            --text-primary: #e2e8f0;
+            --text-secondary: #cbd5e1;
+            background-color: #0b1220;
+            color: var(--text-primary);
+        }
+        .dark .bg-white { background-color: #0f172a !important; color: var(--text-primary) !important; }
+        .dark .bg-white\/80 { background-color: rgba(15,23,42,0.8) !important; color: var(--text-primary) !important; }
+        .dark .bg-white\/\[0\.8\] { background-color: rgba(15,23,42,0.8) !important; color: var(--text-primary) !important; }
+        .dark .bg-slate-50 { background-color: #0b1220 !important; }
+        .dark .text-gray-800 { color: var(--text-primary) !important; }
+        .dark .text-gray-500 { color: var(--text-secondary) !important; }
+        .dark .border-gray-200 { border-color: #334155 !important; }
+        .dark .shadow-lg { box-shadow: 0 10px 30px rgba(0,0,0,0.4) !important; }
         #pills-canvas {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1; background: linear-gradient(to bottom, #e0f7fa, #b3e5fc);
@@ -231,9 +247,9 @@ if (!isset($active)) {
 
   function applyVars(isDark) {
     if (isDark) {
-      root.style.setProperty('--primary-color', '#000000ff');
-      root.style.setProperty('--primary-dark',  '#000000ff');
-      root.style.setProperty('--primary-light', '#101010ff');
+      root.style.setProperty('--primary-color', '#38bdf8'); // sky-400
+      root.style.setProperty('--primary-dark',  '#0ea5e9'); // sky-500
+      root.style.setProperty('--primary-light', '#082f49'); // slate-950-ish accent
     } else {
       root.style.setProperty('--primary-color', '#0284c7');
       root.style.setProperty('--primary-dark',  '#0369a1');
