@@ -145,7 +145,7 @@ $ADMIN_TAB = $_GET['tab'] ?? 'product';
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <title>Quản lý danh mục,thương hiệu và đơn vị tính</title>
+  <title>Quản lý danh mục</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>

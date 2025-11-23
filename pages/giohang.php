@@ -8,8 +8,59 @@ try {
     exit;
 }
 
-// ... (Các code include cũ) ...
+$sessionId = session_id();
+$userId = isset($_SESSION['user']['id']) ? $_SESSION['user']['id'] : null; // Hoặc $_SESSION['user_id'] tùy code login của bạn
 
+// 3. TRUY VẤN DỮ LIỆU TỪ SQL
+$cart_rows = [];
+
+try {
+    if ($userId) {
+        // Nếu đã đăng nhập: Lấy theo makh
+        $sql = "SELECT 
+                    gh.masp, 
+                    gh.soluong AS cart_quantity, 
+                    sp.tensp, 
+                    sp.giaban, 
+                    sp.hinhsp 
+                FROM giohang gh
+                JOIN sanpham sp ON gh.masp = sp.masp
+                WHERE gh.makh = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':id' => $userId]);
+    } else {
+        // Nếu chưa đăng nhập: Lấy theo session_id
+        $sql = "SELECT 
+                    gh.masp, 
+                    gh.soluong AS cart_quantity, 
+                    sp.tensp, 
+                    sp.giaban, 
+                    sp.hinhsp 
+                FROM giohang gh
+                JOIN sanpham sp ON gh.masp = sp.masp
+                WHERE gh.session_id = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':id' => $sessionId]);
+    }
+    
+    $cart_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Ép kiểu dữ liệu để tránh lỗi JS
+    foreach ($cart_rows as &$row) {
+        $row['giaban'] = (float)$row['giaban'];
+        $row['cart_quantity'] = (int)$row['cart_quantity'];
+        // Xử lý đường dẫn ảnh nếu cần (thêm base_url nếu trong DB chỉ lưu đường dẫn tương đối)
+        if (!empty($row['hinhsp']) && strpos($row['hinhsp'], 'http') === false) {
+            // Giả sử ảnh lưu dạng 'uploads/...' thì thêm '/' vào trước
+            $row['hinhsp'] = '/Pharmacy-management/' . ltrim($row['hinhsp'], '/');
+        }
+    }
+    unset($row); // Hủy tham chiếu
+
+} catch (Exception $e) {
+    // Nếu lỗi thì giỏ hàng rỗng
+    $cart_rows = [];
+}
 // 1. Lấy danh sách Tỉnh/Thành phố từ SQL
 $sql_provinces = "SELECT id, full_name FROM provinces ORDER BY id ASC";
 $stmt_p = pdo()->query($sql_provinces);
@@ -273,9 +324,9 @@ $base_url = '/Pharmacy-management';
         <div class="w-full max-w-7xl mx-auto">
             <!-- Tiêu đề và link quay lại -->
             <div class="mb-4">
-                <a href="#" class="font-medium text-lg" style="color: var(--primary-dark);">
+                <a href="/Pharmacy-management/" class="font-medium text-lg" style="color: var(--primary-dark);">
                     <i class="fas fa-arrow-left mr-2"></i>
-                    Quay lại giỏ hàng
+                    Quay lại trang chủ
                 </a>
             </div>
 
@@ -396,10 +447,7 @@ $base_url = '/Pharmacy-management';
         </select>
     </div>
 </div>
-<div>
-    <label class="block text-sm font-medium text-gray-700 mb-1">Nhập địa chỉ chi tiết (số nhà, tên đường)</label>
-    <input type="text" id="ship-address-old" placeholder="Số 2 Võ Oanh" class="login-input">
-</div>
+
 
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Nhập địa chỉ chi tiết (số nhà, tên đường)</label>
@@ -414,220 +462,7 @@ $base_url = '/Pharmacy-management';
                             <!-- === KẾT THÚC FORM "TRƯỚC SÁP NHẬP" === -->
 
                             <!-- === THÊM MỚI: FORM "SAU SÁP NHẬP" (DỰA TRÊN HÌNH ẢNH) === -->
-                            <div class="space-y-4" id="form-sau-sap-nhap" style="display: none;">
-                                <!-- Thông báo (mô phỏng) -->
-                                <div class="bg-sky-50/70 border border-sky-200 rounded-lg p-3 text-center">
-                                    <p class="text-sm" style="color: var(--primary-color);">
-                                        Đơn vị hành chính đã thay đổi theo quy định. 
-                                        <a href="#" class="font-semibold underline">Tra cứu địa chỉ trước và sau sáp nhập.</a>
-                                    </p>
-                                </div>
-
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Họ và tên người nhận</label>
-                                        <input type="text" placeholder="Nguyễn Văn B" class="login-input">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                                        <input type="text" placeholder="09xxxxxxxx" class="login-input">
-                                    </div>
-                                </div>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Tỉnh/Thành phố</label>
-                                        <select class="login-input" disabled>
-                                            <option selected>TP. Hồ Chí Minh</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Phường/Xã</label>
-                                        <select class="login-input">
-                                            <option>Chọn Phường/Xã</option>
-                                            <!-- CẬP NHẬT: Thay thế bằng danh sách đầy đủ từ Long Châu -->
-                                            <option>Phường An Hội Đông</option>
-                                            <option>Phường Hòa Bình</option>
-                                            <option>Phường Hòa Lợi</option>
-                                            <option>Xã Hiệp Phước</option>
-                                            <option>Phường Tân Hiệp</option>
-                                            <option>Xã Bàu Bàng</option>
-                                            <option>Xã Bà Điểm</option>
-                                            <option>Phường Long Hương</option>
-                                            <option>Phường Phước Thắng</option>
-                                            <option>Phường Cầu Ông Lãnh</option>
-                                            <option>Phường An Lạc</option>
-                                            <option selected>Phường Bình Thạnh</option> <!-- Đã chọn -->
-                                            <option>Phường Xuân Hòa</option>
-                                            <option>Xã Bình Hưng</option>
-                                            <option>Xã Phước Hải</option>
-                                            <option>Phường Linh Xuân</option>
-                                            <option>Phường Bến Cát</option>
-                                            <option>Phường Vĩnh Hội</option>
-                                            <option>Phường Tân Thành</option>
-                                            <option>Xã Đất Đỏ</option>
-                                            <option>Phường Minh Phụng</option>
-                                            <option>Xã Xuân Sơn</option>
-                                            <option>Phường Tân Phước</option>
-                                            <option>Phường Lái Thiêu</option>
-                                            <option>Phường Tân Thuận</option>
-                                            <option>Xã Thái Mỹ</option>
-                                            <option>Phường Chánh Phú Hòa</option>
-                                            <option>Phường Tân Bình</option>
-                                            <option>Phường Bình Hưng Hòa</option>
-                                            <option>Phường Tam Thắng</option>
-                                            <option>Xã Bắc Tân Uyên</option>
-                                            <option>Phường Thủ Dầu Một</option>
-                                            <option>Phường Tam Bình</option>
-                                            <option>Phường Thới An</option>
-                                            <option>Phường Phú Thọ</option>
-                                            <option>Xã Cần Giờ</option>
-                                            <option>Xã Thạnh An</option>
-                                            <option>Phường Chợ Lớn</option>
-                                            <option>Xã Bình Lợi</option>
-                                            <option>Phường Phú Thọ Hòa</option>
-                                            <option>Xã Bàu Lâm</option>
-                                            <option>Xã Châu Pha</option>
-                                            <option>Phường Tân Hòa</option>
-                                            <option>Phường Tân Định</option>
-                                            <option>Xã Bình Khánh</option>
-                                            <option>Phường Nhiêu Lộc</option>
-                                            <option>Phường Thủ Đức</option>
-                                            <option>Phường Phú Lợi</option>
-                                            <option>Phường Diên Hồng</option>
-                                            <option>Phường An Nhơn</option>
-                                            <option>Xã Long Hòa</option>
-                                            <option>Phường Phú Lâm</option>
-                                            <option>Phường Chánh Hưng</option>
-                                            <option>Phường Thông Tây Hội</option>
-                                            <option>Phường Hạnh Thông</option>
-                                            <option>Phường Tây Nam</option>
-                                            <option>Phường Bến Thành</option>
-                                            <option>Phường Bình Quới</option>
-                                            <option>Xã Nhà Bè</option>
-                                            <option>Phường Cát Lái</option>
-                                            <option>Phường Cầu Kiệu</option>
-                                            <option>Xã Xuyên Mộc</option>
-                                            <option>Xã Hòa Hiệp</option>
-                                            <option>Phường Sài Gòn</option>
-                                            <option>Xã Phú Giáo</option>
-                                            <option>Phường Gò Vấp</option>
-                                            <option>Phường Phú An</option>
-                                            <option>Phường Đông Hưng Thuận</option>
-                                            <option>Xã Long Hải</option>
-                                            <option>Phường An Phú Đông</option>
-                                            <option>Xã Phước Thành</option>
-                                            <option>Phường Chợ Quán</option>
-                                            <option>Xã Bình Chánh</option>
-                                            <option>Phường Tân Sơn Nhất</option>
-                                            <option>Xã Thanh An</option>
-                                            <option>Phường Phú Thuận</option>
-                                            <option>Xã Long Điền</option>
-                                            <option>Phường Trung Mỹ Tây</option>
-                                            <option>Xã Châu Đức</option>
-                                            <option>Phường Phú Mỹ</option>
-                                            <option>Phường Bình Tây</option>
-                                            <option>Phường Rạch Dừa</option>
-                                            <option>Xã Ngãi Giao</option>
-                                            <option>Phường Bảy Hiền</option>
-                                            <option>Xã Dầu Tiếng</option>
-                                            <option>Xã Đông Thạnh</option>
-                                            <option>Phường Bình Trưng</option>
-                                            <option>Xã Phước Hòa</option>
-                                            <option>Phường Chánh Hiệp</option>
-                                            <option>Phường Bình Trị Đông</option>
-                                            <option>Phường Long Bình</option>
-                                            <option>Phường Phú Định</option>
-                                            <option>Xã Tân Nhựt</option>
-                                            <option>Phường Bình Dương</option>
-                                            <option>Phường Tây Thạnh</option>
-                                            <option>Phường Đức Nhuận</option>
-                                            <option>Xã Củ Chi</option>
-                                            <option>Xã Nghĩa Thành</option>
-                                            <option>Xã Nhuận Đức</option>
-                                            <option>Phường Bà Rịa</option>
-                                            <option>Xã Vĩnh Lộc</option>
-                                            <option>Phường Thuận An</option>
-                                            <option>Xã Tân An Hội</option>
-                                            <option>Phường Tân Hải</option>
-                                            <option>Phường Xóm Chiếu</option>
-                                            <option>Phường Tam Long</option>
-                                            <option>Phường Tân Thới Hiệp</option>
-                                            <option>Phường An Đông</option>
-                                            <option>Phường Long Trường</option>
-                                            <option>Phường Phước Long</option>
-                                            <option>Phường Bàn Cờ</option>
-                                            <option>Phường Bình Đông</option>
-                                            <option>Phường Gia Định</option>
-                                            <option>Phường Hiệp Bình</option>
-                                            <option>Xã Hồ Tràm</option>
-                                            <option>Phường Thạnh Mỹ Tây</option>
-                                            <option>Phường Tăng Nhơn Phú</option>
-                                            <option>Phường Tân Khánh</option>
-                                            <option>Xã Long Sơn</option>
-                                            <option>Xã Thường Tân</option>
-                                            <option>Phường Tân Sơn</option>
-                                            <option>Xã Bình Mỹ</option>
-                                            <option>Phường Đông Hòa</option>
-                                            <option>Phường Tân Đông Hiệp</option>
-                                            <option>Xã Bình Giã</option>
-                                            <option>Phường An Phú</option>
-                                            <option>Xã Kim Long</option>
-                                            <option>Xã Trừ Văn Thố</option>
-                                            <option>Phường Phú Nhuận</option>
-                                            <option>Phường Bình Tiên</option>
-                                            <option>Phường An Khánh</option>
-                                            <option>Xã Minh Thạnh</option>
-                                            <option>Phường Hòa Hưng</option>
-                                            <option>Xã Bình Châu</option>
-                                            <option>Xã An Nhơn Tây</option>
-                                            <option>Phường Long Phước</option>
-                                            <option>Phường Long Nguyên</option>
-                                            <option>Xã An Long</option>
-                                            <option>Phường Thới Hòa</option>
-                                            <option>Xã Phú Hòa Đông</option>
-                                            <option>Phường Tân Phú</option>
-                                            <option>Phường Khánh Hội</option>
-                                            <option>Phường An Hội Tây</option>
-                                            <option>Xã An Thới Đông</option>
-                                            <option>Phường Dĩ An</option>
-                                            <option>Phường Bình Phú</option>
-                                            <option>Phường Bình Tân</option>
-                                            <option>Phường Tân Sơn Nhì</option>
-                                            <option>Phường Tân Mỹ</option>
-                                            <option>Phường Bình Thới</option>
-                                            <option>Phường Tân Hưng</option>
-                                            <option>Đặc khu Côn Đảo</option>
-                                            <option>Phường Bình Lợi Trung</option>
-                                            <option>Phường Thuận Giao</option>
-                                            <option>Phường Tân Uyên</option>
-                                            <option>Phường Bình Hòa</option>
-                                            <option>Phường Tân Sơn Hòa</option>
-                                            <option>Xã Hưng Long</option>
-                                            <option>Xã Xuân Thới Sơn</option>
-                                            <option>Phường Phú Thạnh</option>
-                                            <option>Xã Tân Vĩnh Lộc</option>
-                                            <option>Phường Vườn Lài</option>
-                                            <option>Xã Hòa Hội</option>
-                                            <option>Xã Hóc Môn</option>
-                                            <option>Phường Bình Cơ</option>
-                                            <option>Phường Vũng Tàu</option>
-                                            <option>Phường Tân Tạo</option>
-                                            <option>Phường Vĩnh Tân</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Nhập địa chỉ chi tiết (số nhà, tên đường)</label>
-                                    <input type="text" placeholder="Số 2 Võ Oanh" class="login-input">
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Ghi chú (không bắt buộc)</label>
-                                    <textarea placeholder="Ví dụ: Giao hàng giờ hành chính..." rows="3" class="login-input"></textarea>
-                                </div>
-                            </div>
+                          
                             <!-- === KẾT THÚC FORM "SAU SÁP NHẬP" === -->
 
                         </div>
@@ -1107,6 +942,83 @@ $base_url = '/Pharmacy-management';
     </div>
     <!-- === KẾT THÚC MODAL === -->
 
+<form id="hidden-checkout-form" action="checkout.php" method="POST" style="display: none;">
+    <input type="hidden" name="fullname" id="hidden_fullname">
+    <input type="hidden" name="phone" id="hidden_phone">
+    <input type="hidden" name="address" id="hidden_address">
+    <input type="hidden" name="total_amount" id="hidden_total_amount">
+    <input type="hidden" name="payment_method" id="hidden_payment_method">
+    
+    <input type="hidden" name="cart_items" id="hidden_cart_items">
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Lấy dữ liệu giỏ hàng từ PHP (Đã bao gồm tensp, giaban)
+    const cartRows = <?= json_encode($cart_rows ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    const btnCheckout = document.getElementById('btn-checkout');
+
+    btnCheckout.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        // 1. Validate dữ liệu (Giữ nguyên logic cũ của bạn)
+        const buyerName = document.getElementById('buyer-name').value.trim();
+        const buyerPhone = document.getElementById('buyer-phone').value.trim();
+        
+        if (!buyerName || !buyerPhone) {
+            alert("Vui lòng điền tên và số điện thoại người nhận!");
+            return;
+        }
+
+        // 2. Xử lý địa chỉ (Kết hợp Tỉnh/Phường/Chi tiết)
+        let finalAddress = "";
+        const isDelivery = document.getElementById('btn-giao-hang').classList.contains('tab-active');
+        
+        if (isDelivery) {
+            const provinceSel = document.getElementById('province-select');
+            const wardSel = document.getElementById('ward-select');
+            const detailAddr = document.getElementById('ship-address-old').value.trim(); // ID input địa chỉ
+
+            const provinceText = provinceSel.options[provinceSel.selectedIndex]?.text || "";
+            const wardText = wardSel.options[wardSel.selectedIndex]?.text || "";
+
+            if(provinceSel.value === "" || wardSel.value === "" || detailAddr === "") {
+                alert("Vui lòng chọn đầy đủ địa chỉ giao hàng!");
+                return;
+            }
+            finalAddress = `${detailAddr}, ${wardText}, ${provinceText}`;
+        } else {
+            finalAddress = "Nhận tại nhà thuốc (123 Nguyễn Huệ, Q1)";
+        }
+
+        // 3. Lấy tổng tiền
+        const totalText = document.getElementById('thanh-tien').textContent;
+        const totalAmount = parseInt(totalText.replace(/\./g, '').replace('đ', '').replace(/,/g, ''));
+
+        // 4. Xác định phương thức thanh toán
+        let paymentMethod = 'COD';
+        const paymentChecked = document.querySelector('input[name="payment-method"]:checked');
+        if (paymentChecked) {
+            paymentMethod = paymentChecked.value; 
+        }
+
+        // 5. Đổ dữ liệu vào Form ẩn
+        document.getElementById('hidden_fullname').value = buyerName;
+        document.getElementById('hidden_phone').value = buyerPhone;
+        document.getElementById('hidden_address').value = finalAddress;
+        document.getElementById('hidden_total_amount').value = totalAmount;
+        document.getElementById('hidden_payment_method').value = paymentMethod;
+        
+        // --- QUAN TRỌNG: Gửi JSON chứa toàn bộ thông tin sản phẩm (để lưu tên + giá) ---
+        document.getElementById('hidden_cart_items').value = JSON.stringify(cartRows);
+
+        // 6. Submit
+        btnCheckout.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang xử lý...';
+        btnCheckout.disabled = true;
+        document.getElementById('hidden-checkout-form').submit();
+    });
+});
+</script>
 
     <!-- === SCRIPT MỚI ĐỂ XỬ LÝ MODAL CHỌN GIỜ === -->
     <script>
@@ -1306,7 +1218,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // ... (Các phần xử lý nút thanh toán khác giữ nguyên) ...
 });
 </script>
     <script>
@@ -1598,6 +1509,149 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('hidden-checkout-form').submit();
     }
     });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Lấy dữ liệu gốc từ PHP (đã query từ SQL)
+    // Biến này sẽ là "Kho dữ liệu" chính ở Client
+    let cartRows = <?= json_encode($cart_rows ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    
+    const listCart = document.getElementById('list-cart-item');
+    const btnCheckout = document.getElementById('btn-checkout');
+    const vn = n => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+
+    // 2. Hàm Render Giỏ hàng
+    function renderCart() {
+        if (!listCart) return;
+        listCart.innerHTML = '';
+        
+        let subtotal = 0;
+
+        cartRows.forEach((item, index) => {
+            // Tính toán tiền
+            const price = parseFloat(item.giaban);
+            const qty = parseInt(item.cart_quantity);
+            subtotal += price * qty;
+
+            const html = `
+                <div class="flex items-start gap-4 py-4 border-b border-gray-200">
+                    <img src="${item.hinhsp}" class="w-20 h-20 rounded-lg border object-cover">
+                    <div class="flex-grow">
+                        <h3 class="font-medium text-gray-800 text-sm">${item.tensp}</h3>
+                        <div class="flex items-center justify-between mt-2">
+                            <span class="font-bold text-sky-600">${vn(price)}</span>
+                            <div class="flex items-center gap-2">
+                                <button type="button" class="w-7 h-7 border rounded flex items-center justify-center hover:bg-gray-100" 
+                                    onclick="updateQty(${index}, -1)">-</button>
+                                <input type="number" class="w-12 text-center border rounded py-1 text-sm" 
+                                    value="${qty}" readonly>
+                                <button type="button" class="w-7 h-7 border rounded flex items-center justify-center hover:bg-gray-100" 
+                                    onclick="updateQty(${index}, 1)">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="removeItem(${index})" class="text-gray-400 hover:text-red-500">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            listCart.insertAdjacentHTML('beforeend', html);
+        });
+
+        updateSummary(subtotal);
+    }
+
+    // 3. Hàm cập nhật tổng tiền
+    function updateSummary(subtotal) {
+        // Logic phí ship: > 300k hoặc Nhận tại quán thì miễn phí
+        const isPickUp = document.getElementById('btn-nhan-tai-nha-thuoc').classList.contains('tab-active');
+        let shipFee = 30000;
+        
+        if (subtotal >= 300000 || isPickUp) {
+            shipFee = 0;
+        }
+
+        document.getElementById('tam-tinh').innerText = vn(subtotal);
+        document.getElementById('phi-van-chuyen').innerText = (shipFee === 0) ? 'Miễn phí' : vn(shipFee);
+        document.getElementById('thanh-tien').innerText = vn(subtotal + shipFee);
+    }
+
+    // 4. Hàm xử lý sự kiện (Global scope để gọi từ HTML string)
+    window.updateQty = function(index, delta) {
+        let newQty = parseInt(cartRows[index].cart_quantity) + delta;
+        if (newQty < 1) newQty = 1;
+        // Cập nhật vào biến gốc cartRows
+        cartRows[index].cart_quantity = newQty;
+        renderCart();
+    };
+
+    window.removeItem = function(index) {
+        if(confirm('Xóa sản phẩm này?')) {
+            cartRows.splice(index, 1);
+            renderCart();
+        }
+    };
+
+    // 5. Xử lý nút THANH TOÁN (Gửi dữ liệu sang checkout.php)
+    if(btnCheckout){
+        btnCheckout.addEventListener('click', (e) => {
+            e.preventDefault(); // Chặn submit mặc định
+
+            // Validate cơ bản
+            const name = document.getElementById('buyer-name').value;
+            const phone = document.getElementById('buyer-phone').value;
+            if(!name || !phone) {
+                alert("Vui lòng nhập Tên và Số điện thoại!");
+                return;
+            }
+
+            // Lấy thông tin địa chỉ
+            const isDelivery = document.getElementById('btn-giao-hang').classList.contains('tab-active');
+            let address = "Nhận tại nhà thuốc";
+            if(isDelivery) {
+                const detail = document.getElementById('ship-address-old').value;
+                // Lấy text từ select box tỉnh (nếu có)
+                const prov = document.getElementById('province-select');
+                const provText = prov.options[prov.selectedIndex]?.text || '';
+                address = `${detail}, ${provText}`;
+            }
+
+            // Đổ dữ liệu vào Form ẩn
+            document.getElementById('hidden_fullname').value = name;
+            document.getElementById('hidden_phone').value = phone;
+            document.getElementById('hidden_address').value = address;
+            
+            // Lấy phương thức thanh toán
+            const payment = document.querySelector('input[name="payment-method"]:checked');
+            /* Logic map value dựa trên text hoặc ID, ở đây giả sử: */
+            let payMethod = 'COD';
+            if(payment) {
+                const label = payment.closest('label').innerText;
+                if(label.includes('MoMo')) payMethod = 'MOMO';
+                else if(label.includes('QR')) payMethod = 'QR';
+                else if(label.includes('thẻ')) payMethod = 'ATM';
+            }
+            document.getElementById('hidden_payment_method').value = payMethod;
+
+            // QUAN TRỌNG: Chuyển mảng cartRows thành JSON string để gửi đi
+            document.getElementById('hidden_cart_items').value = JSON.stringify(cartRows);
+
+            // Submit form ẩn
+            document.getElementById('hidden-checkout-form').submit();
+        });
+    }
+
+    // Xử lý chuyển tab (để tính lại ship)
+    document.getElementById('btn-giao-hang').addEventListener('click', () => {
+        renderCart(); // Render lại để tính ship
+    });
+    document.getElementById('btn-nhan-tai-nha-thuoc').addEventListener('click', () => {
+        renderCart(); // Render lại để tính ship
+    });
+
+    // Khởi chạy lần đầu
+    renderCart();
 });
 </script>
 </body>
