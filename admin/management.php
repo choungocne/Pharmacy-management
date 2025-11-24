@@ -1,6 +1,6 @@
 <?php
 // admin/management.php - Quản lý Danh mục (Tái cấu trúc theo mẫu products.php)
-
+include("../db.php");
 // Tự định nghĩa kết nối PDO, giống như products.php
 $pdo = new PDO(
   'mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4',

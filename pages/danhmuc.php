@@ -7,7 +7,9 @@ include_once __DIR__ . '/../db.php';
 if (!function_exists('pdo')) {
     function pdo() {
         return new PDO(
-          'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4','root','',
+          'mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4',
+        DB_USER,
+        DB_PASS,
           [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]
         );
     }
