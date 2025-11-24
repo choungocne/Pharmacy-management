@@ -526,6 +526,9 @@ PHẦN NỘI DUNG FORM ĐĂNG NHẬP
             </div>
             <h1 class="text-3xl font-bold mt-4" style="color: var(--primary-dark);">Nhà Thuốc An Tâm</h1>
             <p class="text-gray-600 mt-2">Chào mừng bạn trở lại!</p>
+            <!-- <p class="text-gray-500 text-sm mt-1">Tài khoản : admin mật khẩu 123456 ( admin test )<br>
+                nv 0001 mk 123456 ( nhân viên test )
+            </p> -->
         </div>
 
         <?php if ($errorMessage !== ''): ?>
