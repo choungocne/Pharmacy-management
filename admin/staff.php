@@ -3,6 +3,22 @@
 declare(strict_types=1);
 session_start();
 
+$auth = $_SESSION['auth'] ?? null;
+$roles = [];
+if (is_array($auth) && isset($auth['roles'])) {
+    $roles = is_array($auth['roles']) ? $auth['roles'] : json_decode((string)$auth['roles'], true);
+    if (!is_array($roles)) {
+        $roles = [];
+    }
+}
+$isAdmin = in_array('admin', $roles, true);
+$isStaff = in_array('staff', $roles, true);
+
+if (!$auth || (!$isAdmin && !$isStaff)) {
+    header('Location: /Pharmacy-management/login.php');
+    exit;
+}
+
 /* ========= DB: lấy từ ../db.php, nếu không có thì tự kết nối ========= */
 $pdo = null;
 $rootDb = __DIR__ . '/../db.php';
@@ -30,14 +46,9 @@ if (!$pdo instanceof PDO) {
 }
 
 /* ========= RBAC nhẹ ========= */
-function uid(): ?int { return $_SESSION['uid'] ?? 1; }   // demo
 function has_perm(PDO $pdo, string $perm): bool {
-    try {
-        $u = uid(); if (!$u) return false;
-        $st = $pdo->prepare("SELECT FIND_IN_SET(?, perms) ok FROM v_user_perms WHERE user_id=?");
-        $st->execute([$perm,$u]); $r = $st->fetch();
-        return $r ? ((int)$r['ok']===1) : true; // nếu chưa dựng view thì cho phép
-    } catch (Throwable $e) { return true; }
+    // Chỉ admin được phép thao tác ghi; staff chỉ xem
+    return in_array('admin', $_SESSION['auth']['roles'] ?? [], true);
 }
 
 /* ========= Helpers ========= */

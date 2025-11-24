@@ -1,5 +1,25 @@
 <?php
-// admin/products.php - Tích hợp API
+// admin/products.php - API-backed product management
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+$auth = $_SESSION['auth'] ?? null;
+$roles = [];
+if (is_array($auth) && isset($auth['roles'])) {
+    $roles = is_array($auth['roles']) ? $auth['roles'] : json_decode((string)$auth['roles'], true);
+    if (!is_array($roles)) {
+        $roles = [];
+    }
+}
+$isAdmin = in_array('admin', $roles, true);
+$isStaff = in_array('staff', $roles, true);
+
+// Only admin/staff may access this page
+if (!$auth || (!$isAdmin && !$isStaff)) {
+    header('Location: /Pharmacy-management/login.php');
+    exit;
+}
 
 // Kết nối PDO kiểu bền vững
 $pdo = null;
@@ -262,10 +282,12 @@ function build_url($q,$dm,$page,$per){
               <div class="mt-3 flex gap-2">
                 <a href="/pharmacy-management/admin/product_detail.php?masp=<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm transition">Xem</a>
+                <?php if ($isAdmin): ?>
                 <button type="button" data-edit-id="<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm transition">Sửa</button>
                 <button type="button" data-delete-id="<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-sm transition">Xóa</button>
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -385,6 +407,7 @@ function build_url($q,$dm,$page,$per){
 </div>
 
 <script>
+const IS_ADMIN = <?= $isAdmin ? 'true' : 'false' ?>;
 document.addEventListener('DOMContentLoaded', () => {
   const API_URL = '/pharmacy-management/api/api_products.php';
   const modalEl = document.getElementById('productModal');
@@ -413,6 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   async function openEditModal(masp){
+    if (!IS_ADMIN) return;
     try{
       const res = await fetch(`${API_URL}?id=${encodeURIComponent(masp)}`, { headers:{'Accept':'application/json'} });
       const txt = await res.text();
@@ -440,6 +464,10 @@ document.addEventListener('DOMContentLoaded', () => {
   async function submitForm(e){
     e.preventDefault();
     const id = form.masp.value.trim();
+    if (id && !IS_ADMIN) {
+      alert('Bạn không có quyền chỉnh sửa sản phẩm.');
+      return;
+    }
     const payload = {
       tensp: form.tensp.value.trim(),
       giaban: Number(form.giaban.value || 0),
@@ -475,6 +503,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function deleteProduct(id){
+    if (!IS_ADMIN) {
+      alert('Bạn không có quyền xóa sản phẩm.');
+      return;
+    }
     if(!id || !confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
     try{
       const res = await fetch(`${API_URL}/${id}`, { method:'DELETE', headers:{'Accept':'application/json'} });
@@ -494,12 +526,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   form.addEventListener('submit', submitForm);
 
-  document.querySelectorAll('[data-edit-id]').forEach(btn=>{
-    btn.addEventListener('click', ()=>openEditModal(btn.dataset.editId));
-  });
-  document.querySelectorAll('[data-delete-id]').forEach(btn=>{
-    btn.addEventListener('click', ()=>deleteProduct(btn.dataset.deleteId));
-  });
+  if (IS_ADMIN) {
+    document.querySelectorAll('[data-edit-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=>openEditModal(btn.dataset.editId));
+    });
+    document.querySelectorAll('[data-delete-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=>deleteProduct(btn.dataset.deleteId));
+    });
+  }
 
   document.querySelectorAll('[data-count]').forEach(el=>{
     const target=+el.dataset.count || 0;

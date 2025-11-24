@@ -6,6 +6,29 @@ $base_url = $base_url ?? '/Pharmacy-management';
 $current_file = basename(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 $current_tab  = $_GET['tab'] ?? null;
 
+// Bảo vệ khu vực admin: chỉ admin/staff được vào
+$auth = $_SESSION['auth'] ?? null;
+$roles = [];
+if (is_array($auth) && isset($auth['roles'])) {
+    $roles = is_array($auth['roles']) ? $auth['roles'] : json_decode((string)$auth['roles'], true);
+    if (!is_array($roles)) {
+        $roles = [];
+    }
+}
+$isAdmin = in_array('admin', $roles, true);
+$isStaff = in_array('staff', $roles, true);
+
+if (!$auth || (!$isAdmin && !$isStaff)) {
+    header('Location: ' . $base_url . '/login.php');
+    exit;
+}
+
+// Staff không được vào trang quản lý tài khoản
+if (!$isAdmin && $current_file === 'taikhoan.php') {
+    header('Location: ' . $base_url . '/admin/index.php');
+    exit;
+}
+
 function admin_active_if(string $file, ?string $tab = null): string {
     global $current_file, $current_tab;
     if ($current_file !== $file) return '';
