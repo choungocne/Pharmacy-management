@@ -594,9 +594,23 @@ try {
         fetch(BASE_URL+'/cart_handler.php', { method:'POST', body:f })
         .then(r=>r.json())
         .then(d => {
-            if(d.success) showToast('Đã thêm vào giỏ hàng thành công!');
-            else showToast(d.message || 'Lỗi', 'error');
-            if(d.total_items && typeof updateHeaderCartCount === 'function') updateHeaderCartCount(d.total_items);
+            if (d.success) {
+                showToast('Đã thêm vào giỏ hàng thành công!');
+                const cnt = (typeof d.cart_count !== 'undefined') ? d.cart_count : (d.count ?? d.total_items);
+                if (typeof updateHeaderCartCount === 'function' && typeof cnt !== 'undefined') {
+                    updateHeaderCartCount(cnt);
+                }
+                if (typeof refreshHeaderCart === 'function') {
+                    refreshHeaderCart();
+                } else if (typeof viewCart === 'function') {
+                    viewCart();
+                }
+                if (typeof showHeaderMiniCart === 'function') {
+                    showHeaderMiniCart();
+                }
+            } else {
+                showToast(d.message || 'Lỗi', 'error');
+            }
         })
         .catch(() => showToast('Lỗi kết nối server!', 'error'));
     }
