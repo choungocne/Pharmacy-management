@@ -568,6 +568,8 @@ try {
 
 <script>
     const BASE_URL = '<?= $base_url ?>';
+    // Giới hạn cuộn lên đầu trang khi thêm giỏ: chỉ cuộn 1 lần trong 5s
+    let lastAddScrollAt = 0;
 
     // 1. Switch Tab Health
     function switchHealthTab(id, btn) {
@@ -594,9 +596,29 @@ try {
         fetch(BASE_URL+'/cart_handler.php', { method:'POST', body:f })
         .then(r=>r.json())
         .then(d => {
-            if(d.success) showToast('Đã thêm vào giỏ hàng thành công!');
-            else showToast(d.message || 'Lỗi', 'error');
-            if(d.total_items && typeof updateHeaderCartCount === 'function') updateHeaderCartCount(d.total_items);
+            if (d.success) {
+                showToast('Đã thêm vào giỏ hàng thành công!');
+                const cnt = (typeof d.cart_count !== 'undefined') ? d.cart_count : (d.count ?? d.total_items);
+                if (typeof updateHeaderCartCount === 'function' && typeof cnt !== 'undefined') {
+                    updateHeaderCartCount(cnt);
+                }
+                if (typeof refreshHeaderCart === 'function') {
+                    refreshHeaderCart();
+                } else if (typeof viewCart === 'function') {
+                    viewCart();
+                }
+                if (typeof showHeaderMiniCart === 'function') {
+                    showHeaderMiniCart();
+                }
+                // Cuộn nhẹ lên đầu trang để người dùng dễ thao tác, tránh spam cuộn trong 5 giây
+                const now = Date.now();
+                if (now - lastAddScrollAt > 5000) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    lastAddScrollAt = now;
+                }
+            } else {
+                showToast(d.message || 'Lỗi', 'error');
+            }
         })
         .catch(() => showToast('Lỗi kết nối server!', 'error'));
     }

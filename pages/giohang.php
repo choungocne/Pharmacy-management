@@ -94,6 +94,11 @@ $sql_wards = "SELECT id, name_with_type, province_id FROM wards";
 $stmt_w = pdo()->query($sql_wards);
 $all_wards = $stmt_w->fetchAll(PDO::FETCH_ASSOC);
 
+// 3. L?y danh s?ch chi nh?nh
+$sql_branches = "SELECT id, macn, tencn, diachi FROM chinhanh ORDER BY id ASC";
+$stmt_branch = pdo()->query($sql_branches);
+$branches = $stmt_branch->fetchAll(PDO::FETCH_ASSOC);
+
 // Gom nhóm: [province_id => [danh sách phường]]
 $wards_by_province = [];
 foreach ($all_wards as $w) {
@@ -102,6 +107,7 @@ foreach ($all_wards as $w) {
 
 // Chuyển sang JSON để JavaScript đọc được
 $json_wards = json_encode($wards_by_province);
+$json_branches = json_encode($branches, JSON_UNESCAPED_UNICODE);
 
 ?>
 <!-- Flag để tắt mini-cart trên trang giỏ hàng lớn -->
@@ -523,45 +529,10 @@ $base_url = '/Pharmacy-management';
                                     </select>
                                 </div>
                             </div>
+                            <p id="branch-count" class="text-sm text-gray-600 mb-3"></p>
 
-                            <p class="text-sm text-gray-600 mb-3">Có 1 nhà thuốc phù hợp:</p>
-
-                            <!-- Danh sách nhà thuốc (chỉ 1) -->
-                            <div class="space-y-3">
-                                <!-- CẬP NHẬT: Thẻ địa chỉ hiển thị cả địa chỉ mới và cũ -->
-                                <label class="flex items-start p-4 border-2 border-sky-600 bg-sky-50 rounded-lg cursor-pointer shadow-md">
-                                    <input type="radio" name="pharmacy" class="form-radio h-5 w-5 mt-1" checked>
-                                    <div class="ml-4 flex-grow">
-                                        <div class="flex justify-between items-center">
-                                            <span class="font-semibold text-base" style="color: var(--primary-dark);">Nhà Thuốc An Tâm - 001, P. Thạnh Mỹ Tây</span>
-                                            <!-- CẬP NHẬT: Thêm link Google Maps và target="_blank" -->
-                                            <a 
-                                                href="https://www.google.com/maps/dir/10.8164596,106.6831393/2+%C4%90%C6%B0%E1%BB%9Dng+V%C3%B5+Oanh,+Ph%C6%B0%E1%BB%9Dng+25,+B%C3%ACnh+Th%E1%BA%A1nh,+Th%C3%A0nh+ph%E1%BB%91+H%E1%BB%93+Ch%C3%AD+Minh/@10.812535,106.6873478,15z/data=!3m1!4b1!4m9!4m8!1m1!4e1!1m5!1m1!1s0x317528a3f0b1f849:0x234506e937a8dbef!2m2!1d106.7170736!2d10.8049159?entry=ttu&g_ep=EgoyMDI1MTExMC4wIKXMDSoASAFQAw%3D%3D" 
-                                                target="_blank" 
-                                                rel="noopener noreferrer"
-                                                class="text-sm font-medium" 
-                                                style="color: var(--primary-color); white-space: nowrap;"
-                                            >
-                                                <i class="fas fa-directions"></i> Chỉ đường
-                                            </a>
-                                        </div>
-                                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mt-1">
-                                            <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                                                <i class="fas fa-check-circle text-xs"></i> Có hàng
-                                            </span>
-                                            <span class="text-gray-700">Mở cửa: 06:00 - 22:00</span>
-                                        </div>
-                                        <p class="text-sm text-gray-700 mt-2">
-                                            <i class="fas fa-map-marker-alt text-gray-500 mr-2"></i>
-                                            Số 2 Võ Oanh, Phường Thạnh Mỹ Tây, Quận Bình Thạnh, TP. Hồ Chí Minh
-                                        </p>
-                                        <!-- Thêm địa chỉ cũ -->
-                                        <p class="text-xs text-gray-500 mt-1 pl-6">
-                                            Địa chỉ cũ: Số 2 Võ Oanh, P. 25, Q. Bình Thạnh, TP. Hồ Chí Minh
-                                        </p>
-                                    </div>
-                                </label>
-                            </div>
+                            <!-- Danh s?ch nh? thu?c (render b?ng JS) -->
+                            <div id="branch-list" class="space-y-3"></div>
 
                             <!-- === THÊM MỚI: THỜI GIAN NHẬN HÀNG DỰ KIẾN === -->
                             <div class="flex items-center justify-between mt-5 pt-4 border-t border-gray-200">
@@ -1248,10 +1219,63 @@ document.addEventListener('DOMContentLoaded', () => {
             const BASE_URL = '<?= $base_url ?>';
             const listCart = document.getElementById('list-cart-item');
             const cartRows = <?= json_encode($cart_rows ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
+            const branches = <?= $json_branches ?? '[]' ?>;
+            const branchList = document.getElementById('branch-list');
+            const branchCount = document.getElementById('branch-count');
 
             // Helpers
             const vn = n => new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + 'đ';
             const $ = s => document.querySelector(s);
+            const esc = (str = '') => String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
+            function renderBranches() {
+                if (!branchList) return;
+                if (!Array.isArray(branches) || branches.length === 0) {
+                    branchList.innerHTML = '<p class="text-sm text-gray-600">Hiện chưa có nhà thuốc khả dụng.</p>';
+                    if (branchCount) branchCount.textContent = '';
+                    return;
+                }
+                branchList.innerHTML = '';
+                if (branchCount) branchCount.textContent = `Có ${branches.length} nhà thuốc phù hợp:`;
+
+                branches.forEach((b, idx) => {
+                    const id = typeof b.id !== 'undefined' ? b.id : idx;
+                    const name = esc(b.tencn ?? 'Nhà thuốc');
+                    const code = esc(b.macn ?? '');
+                    const addr = esc(b.diachi ?? '');
+                    const mapHref = `https://www.google.com/maps/search/${encodeURIComponent(addr)}`;
+
+                    const tpl = `
+                        <label class="flex items-start p-4 border-2 ${idx === 0 ? 'border-sky-600 bg-sky-50' : 'border-gray-200'} rounded-lg cursor-pointer shadow-sm has-[:checked]:border-sky-600 has-[:checked]:bg-sky-50 transition-colors">
+                            <input type="radio" name="pharmacy" class="form-radio h-5 w-5 mt-1" value="${id}" data-address="${addr}" data-branch-name="${name}" ${idx === 0 ? 'checked' : ''}>
+                            <div class="ml-4 flex-grow space-y-2">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-semibold text-base" style="color: var(--primary-dark);">${name}${code ? ' - ' + code : ''}</span>
+                                    <a href="${mapHref}" target="_blank" rel="noopener noreferrer" class="text-sm font-medium" style="color: var(--primary-color); white-space: nowrap;">
+                                        <i class="fas fa-directions"></i> Chỉ đường
+                                    </a>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                    <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                        <i class="fas fa-check-circle text-xs"></i> Có hàng
+                                    </span>
+                                    <span class="text-gray-700">Mở cửa: 06:00 - 22:00</span>
+                                </div>
+                                <p class="text-sm text-gray-700">
+                                    <i class="fas fa-map-marker-alt text-gray-500 mr-2"></i>
+                                    ${addr}
+                                </p>
+                            </div>
+                        </label>
+                    `;
+                    branchList.insertAdjacentHTML('beforeend', tpl);
+                });
+            }
 
             function renderCartItems() {
                 if (!listCart || !Array.isArray(cartRows)) return;
@@ -1316,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderCartItems();
             if (!listCart) return;
+            renderBranches();
 
             // Khi click nút +/- (đã có đoạn lắng nghe trước đó, nếu chưa thì thêm)
             listCart.addEventListener('click', (e) => {
@@ -1481,20 +1506,17 @@ document.addEventListener('DOMContentLoaded', () => {
         let finalAddress = "";
         
         if (isDelivery) {
-            // Đang chọn Giao hàng tận nơi
+            // Dang chon Giao hang tan noi
             const isTruocSapNhap = document.getElementById('radio-truoc-sap-nhap').checked;
             const suffix = isTruocSapNhap ? '-old' : '-new';
-            
-            // Lấy các giá trị từ form (giả sử bạn đã đặt ID cho các select tỉnh/huyện/xã là city-old, dist-old...)
-            // Ở đây mình lấy ví dụ lấy từ input địa chỉ chi tiết + text của select
             const addressDetail = document.getElementById('ship-address' + suffix).value;
-            
-            // Lưu ý: Bạn cần thêm ID cho các thẻ select Tỉnh/Huyện/Xã để lấy text chính xác.
-            // Ví dụ tạm thời lấy địa chỉ chi tiết:
-            finalAddress = addressDetail + " (Giao tận nơi)"; 
+            finalAddress = addressDetail + ' (Giao tan noi)';
         } else {
-            // Đang chọn Nhận tại nhà thuốc
-            finalAddress = "Nhận tại: Nhà Thuốc An Tâm - 001, P. Thạnh Mỹ Tây";
+            // Dang chon Nhan tai nha thuoc
+            const branchChecked = document.querySelector('input[name="pharmacy"]:checked');
+            const branchName = branchChecked?.dataset.branchName || 'Nha thuoc';
+            const branchAddr = branchChecked?.dataset.address || '';
+            finalAddress = `Nhan tai: ${branchName}${branchAddr ? ' - ' + branchAddr : ''}`;
         }
 
         // 3. Lấy tổng tiền (loại bỏ chữ 'đ' và dấu chấm)

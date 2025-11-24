@@ -426,16 +426,57 @@ if (!empty($product_mamv_ids)) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || 'Đã thêm vào giỏ hàng!');
-                location.reload();
+                showToast('Đã thêm vào giỏ hàng thành công!');
+                const cnt = (typeof data.cart_count !== 'undefined') ? data.cart_count : (data.count ?? data.total_items);
+                if (typeof updateHeaderCartCount === 'function' && typeof cnt !== 'undefined') {
+                    updateHeaderCartCount(cnt);
+                }
+                if (typeof refreshHeaderCart === 'function') {
+                    refreshHeaderCart();
+                } else if (typeof viewCart === 'function') {
+                    viewCart();
+                }
+                if (typeof showHeaderMiniCart === 'function') {
+                    showHeaderMiniCart();
+                }
             } else {
-                alert(data.message || 'Có lỗi xảy ra!');
+                showToast(data.message || 'Có lỗi xảy ra!', 'error');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Có lỗi xảy ra khi thêm vào giỏ hàng!');
+            showToast('Có lỗi xảy ra khi thêm vào giỏ hàng!', 'error');
         });
+    }
+
+    // Toast giống home
+    (function ensureToastContainer(){
+        if (document.getElementById('toast-container')) return;
+        const c = document.createElement('div');
+        c.id = 'toast-container';
+        c.style.position = 'fixed';
+        c.style.top = '16px';
+        c.style.right = '16px';
+        c.style.zIndex = '9999';
+        c.style.display = 'flex';
+        c.style.flexDirection = 'column';
+        c.style.gap = '8px';
+        document.body.appendChild(c);
+    })();
+
+    function showToast(msg, type='success') {
+        const t = document.createElement('div');
+        t.className = 'toast-msg';
+        t.style.background = '#fff';
+        t.style.borderRadius = '10px';
+        t.style.boxShadow = '0 6px 18px rgba(0,0,0,0.12)';
+        t.style.padding = '10px 14px';
+        t.style.display = 'flex';
+        t.style.alignItems = 'center';
+        t.style.borderLeft = `4px solid ${type==='success' ? '#22c55e' : '#ef4444'}`;
+        t.innerHTML = `<i class="fas ${type==='success'?'fa-check-circle':'fa-exclamation-circle'}" style="color:${type==='success'?'#22c55e':'#ef4444'}; font-size:16px; margin-right:8px;"></i><span style="font-weight:600; font-size:14px; color:#333;">${msg}</span>`;
+        document.getElementById('toast-container').appendChild(t);
+        setTimeout(() => t.remove(), 2800);
     }
 
     // Logic lọc sản phẩm (client-side)

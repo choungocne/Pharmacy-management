@@ -725,6 +725,110 @@ document.addEventListener('DOMContentLoaded', function() {
     window.showHeaderMiniCart = openCartDropdown;
 });
 
+// Mini-cart helpers (khong reload trang)
+(function() {
+    if (window.IS_BIG_CART_PAGE) return;
+
+    const BASE_URL = '<?= $base_url ?>';
+    const cartWrapper = document.querySelector('.cart-wrapper');
+    const cartBody = cartWrapper?.querySelector('.cart-dropdown-body');
+    const cartSummary = cartWrapper?.querySelector('.cart-summary');
+    const badgeHost = cartWrapper?.querySelector('.cart-trigger');
+    const emptyHtml = `
+        <div class="cart-empty">
+            <i class="fas fa-shopping-cart"></i>
+            <p>Giỏ hàng của bạn đang trống</p>
+        </div>`;
+
+    const money = n => {
+        const val = Number(n) || 0;
+        return val.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + 'đ';
+    };
+
+    function setBadge(count) {
+        if (!badgeHost) return;
+        let badge = badgeHost.querySelector('.cart-badge');
+        if (!badge && count > 0) {
+            badge = document.createElement('span');
+            badge.className = 'cart-badge';
+            badgeHost.appendChild(badge);
+        }
+        if (badge) {
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    }
+
+    function renderMiniCart(items, totalCount) {
+        if (!cartBody) return;
+        if (!items || !items.length) {
+            cartBody.innerHTML = emptyHtml;
+            if (cartSummary) {
+                const countEl = cartSummary.querySelector('.cart-total-items');
+                if (countEl) countEl.textContent = '0 sản phẩm';
+            }
+            setBadge(0);
+            return;
+        }
+
+        cartBody.innerHTML = items.map(it => {
+            const name = it.tensp || it.name || 'Sản phẩm';
+            const qty = it.cart_quantity || it.quantity || 1;
+            const price = it.giaban || it.final_price || it.price || 0;
+            const id = it.id || it.masp;
+            const img = it.hinhsp || it.image || '';
+            return `
+                <div class="cart-item" data-id="${id}">
+                    <div class="cart-item-img">
+                        <a href="<?= $base_url ?>/base.php?page=detailsproducts&masp=${id}">
+                            <img src="${img}" alt="${name}">
+                        </a>
+                    </div>
+                    <div class="cart-item-info">
+                        <a href="<?= $base_url ?>/base.php?page=detailsproducts&masp=${id}" class="cart-item-name">${name}</a>
+                        <div class="cart-item-bottom">
+                            <div class="cart-item-price">
+                                <span class="price">${money(price)}</span>
+                            </div>
+                            <span class="cart-item-quantity">x${qty}</span>
+                        </div>
+                    </div>
+                    <button class="cart-item-delete" onclick="removeFromCart(${id})">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        if (cartSummary) {
+            const countEl = cartSummary.querySelector('.cart-total-items');
+            if (countEl) countEl.textContent = `${totalCount ?? items.length} sản phẩm`;
+        }
+        setBadge(totalCount ?? items.length);
+    }
+
+    async function refreshHeaderCart() {
+        try {
+            const res = await fetch(`${BASE_URL}/cart_handler.php?action=view`);
+            const data = await res.json();
+            if (data && data.success) {
+                renderMiniCart(data.items || [], data.count || data.total_items);
+            }
+        } catch (e) {
+            console.error('Cart refresh failed', e);
+        }
+    }
+
+    window.refreshHeaderCart = refreshHeaderCart;
+    window.updateHeaderCartCount = setBadge;
+
+    refreshHeaderCart();
+})();
+
 function removeFromCart(id) {
     if (confirm('Bạn có chắc muốn xóa sản phẩm này khỏi giỏ hàng?')) {
         fetch('<?= $base_url ?>/cart_handler.php', {
@@ -735,7 +839,11 @@ function removeFromCart(id) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                location.reload();
+                if (typeof refreshHeaderCart === 'function') {
+                    refreshHeaderCart();
+                } else {
+                    location.reload();
+                }
             }
         })
         .catch(error => console.error('Error:', error));
