@@ -28,11 +28,9 @@ if (!$pdo instanceof PDO) {
 
         $pdo = new PDO(
 
-            'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4',
-
-            'root',
-
-            '',
+            'mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4',
+        DB_USER,
+        DB_PASS,
 
             [
 
