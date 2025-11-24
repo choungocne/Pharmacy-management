@@ -1,4 +1,15 @@
 <?php
+// Start session so the cart can read the correct session_id/customer
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_set_cookie_params([
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'path' => '/',
+    ]);
+    session_start();
+}
+
 require_once __DIR__ . '/../db.php'; 
 
 try {
@@ -9,7 +20,23 @@ try {
 }
 
 $sessionId = session_id();
-$userId = isset($_SESSION['user']['id']) ? $_SESSION['user']['id'] : null; // Hoặc $_SESSION['user_id'] tùy code login của bạn
+$auth = $_SESSION['auth'] ?? [];
+$userId = $auth['makh'] ?? ($_SESSION['makh'] ?? null);
+$baseUrl = '/Pharmacy-management';
+
+$normalizeImage = function (string $path) use ($baseUrl): string {
+    $path = trim($path);
+    if ($path === '') {
+        return $baseUrl . '/static/img/placeholder.jpg';
+    }
+    if (preg_match('#^https?://#i', $path)) {
+        return $path;
+    }
+    // Bỏ tiền tố trùng lặp, luôn ghép một lần baseUrl
+    $path = ltrim($path, '/');
+    $path = preg_replace('#^(Pharmacy-management/)+#i', '', $path);
+    return rtrim($baseUrl, '/') . '/' . $path;
+};
 
 // 3. TRUY VẤN DỮ LIỆU TỪ SQL
 $cart_rows = [];
@@ -49,11 +76,7 @@ try {
     foreach ($cart_rows as &$row) {
         $row['giaban'] = (float)$row['giaban'];
         $row['cart_quantity'] = (int)$row['cart_quantity'];
-        // Xử lý đường dẫn ảnh nếu cần (thêm base_url nếu trong DB chỉ lưu đường dẫn tương đối)
-        if (!empty($row['hinhsp']) && strpos($row['hinhsp'], 'http') === false) {
-            // Giả sử ảnh lưu dạng 'uploads/...' thì thêm '/' vào trước
-            $row['hinhsp'] = '/Pharmacy-management/' . ltrim($row['hinhsp'], '/');
-        }
+        $row['hinhsp'] = $normalizeImage((string)($row['hinhsp'] ?? ''));
     }
     unset($row); // Hủy tham chiếu
 
@@ -1535,24 +1558,21 @@ document.addEventListener('DOMContentLoaded', () => {
             subtotal += price * qty;
 
             const html = `
-                <div class="flex items-start gap-4 py-4 border-b border-gray-200">
-                    <img src="${item.hinhsp}" class="w-20 h-20 rounded-lg border object-cover">
-                    <div class="flex-grow">
-                        <h3 class="font-medium text-gray-800 text-sm">${item.tensp}</h3>
-                        <div class="flex items-center justify-between mt-2">
-                            <span class="font-bold text-sky-600">${vn(price)}</span>
+                <div class="flex items-start gap-4 py-4 border-b border-gray-200 cart-item cart-item${index + 1}">
+                    <img src="${item.hinhsp}" alt="${item.tensp}" class="w-24 h-24 rounded-lg border border-gray-200 object-cover">
+                    <div class="flex-grow space-y-2">
+                        <h3 class="font-medium text-gray-800">${item.tensp}</h3>
+                        <div class="flex items-center justify-between gap-4">
+                            <span class="font-semibold text-lg" style="color: var(--primary-color);">${vn(price)}</span>
                             <div class="flex items-center gap-2">
-                                <button type="button" class="w-7 h-7 border rounded flex items-center justify-center hover:bg-gray-100" 
-                                    onclick="updateQty(${index}, -1)">-</button>
-                                <input type="number" class="w-12 text-center border rounded py-1 text-sm" 
-                                    value="${qty}" readonly>
-                                <button type="button" class="w-7 h-7 border rounded flex items-center justify-center hover:bg-gray-100" 
-                                    onclick="updateQty(${index}, 1)">+</button>
+                                <button type="button" class="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:text-gray-800 btn-change-qty" onclick="updateQty(${index}, -1)">-</button>
+                                <input type="number" class="login-input w-20 text-center py-1 px-2 cart-qty-input" value="${qty}" min="1" max="100">
+                                <button type="button" class="w-8 h-8 flex items-center justify-center rounded-md border border-gray-300 text-gray-600 hover:text-gray-800 btn-change-qty" onclick="updateQty(${index}, 1)">+</button>
                             </div>
                         </div>
                     </div>
-                    <button onclick="removeItem(${index})" class="text-gray-400 hover:text-red-500">
-                        <i class="fas fa-trash"></i>
+                    <button onclick="removeItem(${index})" class="text-gray-400 hover:text-red-500 transition-colors">
+                        <i class="fas fa-trash-alt fa-lg"></i>
                     </button>
                 </div>
             `;
