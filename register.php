@@ -1,6 +1,217 @@
 <?php
-// Thay đổi tiêu đề trang
+declare(strict_types=1);
+
+$secureCookie = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+session_set_cookie_params([
+    'httponly' => true,
+    'samesite' => 'Lax',
+    'secure' => $secureCookie,
+    'path' => '/',
+]);
+session_start();
+
+const ENFORCE_STATUS = false;
+
+function client_ip(): string
+{
+    $keys = ['HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];
+    foreach ($keys as $key) {
+        if (!empty($_SERVER[$key])) {
+            $parts = explode(',', (string)$_SERVER[$key]);
+            $ip = trim($parts[0]);
+            if ($ip !== '') {
+                return $ip;
+            }
+        }
+    }
+
+    return '0.0.0.0';
+}
+
+function csrf_token(): string
+{
+    if (empty($_SESSION['csrf'])) {
+        $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    }
+
+    return (string)$_SESSION['csrf'];
+}
+
+function check_rate_limit(string $username, string $ip): bool
+{
+    $maxAttempts = 5;
+    $windowSeconds = 600;
+    $userKey = $username !== '' ? $username : '_blank';
+
+    if (!isset($_SESSION['login_attempts'][$userKey][$ip])) {
+        $_SESSION['login_attempts'][$userKey][$ip] = [
+            'count' => 0,
+            'first_at' => time(),
+        ];
+        return false;
+    }
+
+    $entry = &$_SESSION['login_attempts'][$userKey][$ip];
+    if ((time() - (int)$entry['first_at']) > $windowSeconds) {
+        $entry = ['count' => 0, 'first_at' => time()];
+        return false;
+    }
+
+    return (int)$entry['count'] >= $maxAttempts;
+}
+
+function register_failed_attempt(string $username, string $ip): void
+{
+    $userKey = $username !== '' ? $username : '_blank';
+    if (!isset($_SESSION['login_attempts'][$userKey][$ip])) {
+        $_SESSION['login_attempts'][$userKey][$ip] = ['count' => 0, 'first_at' => time()];
+    }
+    $_SESSION['login_attempts'][$userKey][$ip]['count'] = (int)$_SESSION['login_attempts'][$userKey][$ip]['count'] + 1;
+}
+
+function reset_rate_limit(string $username, string $ip): void
+{
+    $userKey = $username !== '' ? $username : '_blank';
+    if (isset($_SESSION['login_attempts'][$userKey][$ip])) {
+        unset($_SESSION['login_attempts'][$userKey][$ip]);
+    }
+}
+
+function load_tokens(?string $tokens): array
+{
+    if ($tokens === null || trim($tokens) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($tokens, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function save_tokens(array $tokens): string
+{
+    $json = json_encode($tokens, JSON_UNESCAPED_UNICODE);
+    return $json === false ? '[]' : $json;
+}
+
+$pdo = null;
+if (is_file(__DIR__ . '/db.php')) {
+    require_once __DIR__ . '/db.php';
+    if (function_exists('pdo')) {
+        $pdo = pdo();
+    }
+}
+
+if (!$pdo) {
+    $pdo = new PDO(
+        'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4',
+        'root',
+        '',
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+    $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+}
+
 $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
+$errorMessage = '';
+$csrfToken = csrf_token();
+$oldFullname = '';
+$oldUsername = '';
+$oldEmail = '';
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    $oldFullname = trim((string)($_POST['fullname'] ?? ''));
+    $oldUsername = strtolower(trim((string)($_POST['username'] ?? '')));
+    $oldEmail = trim((string)($_POST['email'] ?? ''));
+
+    if (!hash_equals($_SESSION['csrf'] ?? '', (string)($_POST['csrf'] ?? ''))) {
+        $errorMessage = 'Phiên không hợp lệ. Vui lòng tải lại trang và thử lại.';
+    } else {
+        $fullname = $oldFullname;
+        $username = $oldUsername;
+        $email = $oldEmail;
+        $password = (string)($_POST['password'] ?? '');
+        $confirmPassword = (string)($_POST['confirm-password'] ?? '');
+        $remember = isset($_POST['remember-me']);
+        $ip = client_ip();
+
+        $isLimited = check_rate_limit($username, $ip) || check_rate_limit('_ip_', $ip);
+        if ($isLimited) {
+            $errorMessage = 'Tài khoản tạm khóa do đăng ký nhiều lần. Vui lòng thử lại sau.';
+        } else {
+            $invalid = false;
+            $nameLength = function_exists('mb_strlen') ? mb_strlen($fullname, 'UTF-8') : strlen($fullname);
+            if ($fullname === '' || $nameLength > 100) {
+                $invalid = true;
+            }
+            if ($email !== '') {
+                $emailLength = function_exists('mb_strlen') ? mb_strlen($email, 'UTF-8') : strlen($email);
+                if ($emailLength > 150 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $invalid = true;
+                }
+            } else {
+                $email = null;
+            }
+            $usernameLength = strlen($username);
+            if ($username === '' || $usernameLength < 3 || $usernameLength > 60 || !preg_match('/^[a-z0-9._]+$/', $username)) {
+                $invalid = true;
+            }
+            if (strlen($password) < 6 || $password !== $confirmPassword) {
+                $invalid = true;
+            }
+
+            if ($invalid) {
+                register_failed_attempt($username, $ip);
+                register_failed_attempt('_ip_', $ip);
+                $errorMessage = 'Thông tin không hợp lệ hoặc tài khoản đã tồn tại.';
+            } else {
+                try {
+                    $stmt = $pdo->prepare('SELECT id FROM auth WHERE username = ? LIMIT 1');
+                    $stmt->execute([$username]);
+                    $existing = $stmt->fetch();
+                } catch (Throwable $e) {
+                    $existing = null;
+                }
+
+                if ($existing) {
+                    register_failed_attempt($username, $ip);
+                    register_failed_attempt('_ip_', $ip);
+                    $errorMessage = 'Thông tin không hợp lệ hoặc tài khoản đã tồn tại.';
+                } else {
+                    try {
+                        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                        $roles = ['customer'];
+                        $permissions = [];
+                        $tokens = [];
+
+                        $tokensJson = $tokens === [] ? '{}' : save_tokens($tokens);
+                        $rolesJson = json_encode($roles, JSON_UNESCAPED_UNICODE);
+                        $permissionsJson = json_encode($permissions, JSON_UNESCAPED_UNICODE);
+
+                        $insert = $pdo->prepare('INSERT INTO auth (username, password_hash, email, manv, makh, status, roles, permissions, tokens) VALUES (?, ?, ?, NULL, NULL, 1, ?, ?, ?)');
+                        $insert->execute([$username, $passwordHash, $email, $rolesJson, $permissionsJson, $tokensJson]);
+                        $userId = (int)$pdo->lastInsertId();
+
+                        reset_rate_limit($username, $ip);
+                        reset_rate_limit('_ip_', $ip);
+                        unset($_SESSION['csrf']);
+                        $csrfToken = csrf_token();
+
+                        $_SESSION['register_success'] = 'Đăng ký thành công. Vui lòng đăng nhập.';
+                        header('Location: login.php');
+                        exit;
+                    } catch (Throwable $e) {
+                        register_failed_attempt($username, $ip);
+                        register_failed_attempt('_ip_', $ip);
+                        $errorMessage = 'Thông tin không hợp lệ hoặc tài khoản đã tồn tại.';
+                    }
+                }
+            }
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -18,7 +229,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
     
     <!-- 
       TOÀN BỘ CSS CỦA TRANG ĐĂNG NHẬP (ĐƯỢC GIỮ NGUYÊN)
-      Tất cả hiệu ứng "treo lơ lửng", "phóng to", "nghiêng" đều ở đây
+      Tất cả hiệu ứng "treo lơ lửng", "phóng to", "nghiêng" đều đã có sẵn
     -->
     <style>
         :root {
@@ -33,8 +244,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             overflow: hidden; 
         }
 
-        /* Sao chép style cho canvas từ file header.php 
-        */
+        /* Sao chép style cho canvas từ file header.php */
         #pills-canvas {
             position: fixed; 
             top: 0; 
@@ -46,8 +256,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             background: linear-gradient(to bottom, #e0f7fa, #b3e5fc);
         }
 
-        /* * HIỆU ỨNG MỚI CHO FORM ĐĂNG NHẬP (ĐÃ CẢI TIẾN)
-        */
+        /* * HIỆU ỨNG MỚI CHO FORM ĐĂNG NHẬP (ĐÃ CÓ CẢI TIẾN) */
 
         /* Keyframes cho form bay lên, phóng to, và mờ dần (cải tiến) */
         @keyframes fadeInUpAndGrow {
@@ -80,7 +289,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             animation-name: fadeInUpAndGrow, float;
             animation-duration: 0.9s, 3s; /* Thời lượng cho mỗi animation */
             animation-timing-function: ease-out, ease-in-out;
-            animation-delay: 0s, 0.9s; /* float sẽ delay 0.9s để chờ cái kia chạy xong */
+            animation-delay: 0s, 0.9s; /* float sẽ delay 0.9s để cho cái kia chạy xong */
             animation-iteration-count: 1, infinite; /* fadeInUpAndGrow chạy 1 lần, float lặp vô hạn */
             animation-fill-mode: forwards, none; /* Giữ trạng thái cuối của fadeInUpAndGrow */
 
@@ -96,8 +305,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             /* (running là để đảm bảo cái đầu tiên vẫn chạy nếu hover vào sớm) */
         }
         
-        /* * HIỆU ỨNG CŨ CHO NÚT BẤM (GIỮ NGUYÊN) 
-        */
+        /* * HIỆU ỨNG CŨ CHO NÚT BẤM (GIỮ NGUYÊN) */
         @keyframes pulse-glow {
             0%, 100% {
                 box-shadow: 0 0 20px rgba(2, 132, 199, 0.3);
@@ -115,7 +323,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             /* Áp dụng animation pulse-glow */
             animation: pulse-glow 2.5s infinite ease-in-out;
             
-            /* Thêm một chút bóng đổ mặc định */
+            /* Thêm một chút bóng đổ mức ổn định */
             box-shadow: 0 4px 14px 0 rgba(2, 132, 199, 0.25);
         }
 
@@ -135,8 +343,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             box-shadow: 0 2px 10px 0 rgba(2, 132, 199, 0.2);
         }
         
-        /* * HIỆU ỨNG CŨ CHO Ô INPUT (GIỮ NGUYÊN)
-        */
+        /* * HIỆU ỨNG CŨ CHO Ô INPUT (GIỮ NGUYÊN) */
         .login-input {
             transition: all 0.2s ease-in-out;
         }
@@ -246,7 +453,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
     
     <!-- 
       Card Đăng Ký
-      - GIỮ NGUYÊN class 'login-card-animation' để có hiệu ứng
+      - Giữ nguyên class 'login-card-animation' để có hiệu ứng
     -->
     <div class="bg-white/80 backdrop-blur-lg p-8 md:p-10 rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md login-card-animation">
         
@@ -264,10 +471,17 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
             <p class="text-gray-600 mt-2">Tạo tài khoản mới</p>
         </div>
 
+        <?php if ($errorMessage !== ''): ?>
+            <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <?php echo htmlspecialchars($errorMessage); ?>
+            </div>
+        <?php endif; ?>
+
         <!-- Form Đăng Ký -->
         <form action="#" method="POST" class="space-y-5"> <!-- Giảm space-y một chút để vừa 3-4 ô -->
+            <input type="hidden" name="csrf" value="<?php echo htmlspecialchars($csrfToken); ?>">
             
-            <!-- THÊM: Ô Họ và Tên -->
+            <!-- THẺ: Ô Họ và Tên -->
             <div>
                 <label for="fullname" class="block text-sm font-medium text-gray-700 mb-2">
                     Họ và Tên
@@ -284,6 +498,29 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
                         name="fullname"
                         placeholder="Nguyễn Văn A"
                         required
+                        value="<?php echo htmlspecialchars($oldFullname); ?>"
+                        class="login-input w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white/70 focus:bg-white"
+                    >
+                </div>
+            </div>
+
+            <!-- THẺ: Ô Email -->
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-400">
+                            <path d="M4 4h16v16H4z" opacity="0.2"/><path d="M4 4h16v16H4z"/><path d="m4 6 8 7 8-7"/>
+                        </svg>
+                    </div>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email"
+                        placeholder="email@example.com"
+                        value="<?php echo htmlspecialchars($oldEmail); ?>"
                         class="login-input w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white/70 focus:bg-white"
                     >
                 </div>
@@ -306,6 +543,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
                         name="username"
                         placeholder="ten.dang.nhap"
                         required
+                        value="<?php echo htmlspecialchars($oldUsername); ?>"
                         class="login-input w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white/70 focus:bg-white"
                     >
                 </div>
@@ -326,14 +564,14 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
                         type="password" 
                         id="password" 
                         name="password"
-                        placeholder="••••••••"
+                        placeholder="********"
                         required
                         class="login-input w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white/70 focus:bg-white"
                     >
                 </div>
             </div>
 
-            <!-- THÊM: Ô Xác nhận Mật khẩu -->
+            <!-- THẺ: Ô Xác nhận Mật khẩu -->
             <div>
                 <label for="confirm-password" class="block text-sm font-medium text-gray-700 mb-2">
                     Xác nhận mật khẩu
@@ -348,13 +586,17 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
                         type="password" 
                         id="confirm-password" 
                         name="confirm-password"
-                        placeholder="••••••••"
+                        placeholder="********"
                         required
                         class="login-input w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white/70 focus:bg-white"
                     >
                 </div>
             </div>
 
+            <div class="flex items-center gap-2 text-sm">
+                <input id="remember-me" name="remember-me" type="checkbox" class="h-4 w-4 rounded border-gray-300" style="color: var(--primary-color);">
+                <label for="remember-me" class="text-gray-700">Ghi nhớ tài khoản</label>
+            </div>
 
             <!-- THAY ĐỔI: Chuyển sang link "Đã có tài khoản" -->
             <div class="text-sm text-center">
@@ -366,7 +608,7 @@ $page_title = 'Đăng Ký - Quản Trị Nhà Thuốc';
 
             <!-- 
               Nút Đăng Ký
-              - GIỮ NGUYÊN class 'login-button'
+              - Giữ nguyên class 'login-button'
               - Thay đổi text
             -->
             <div>

@@ -138,7 +138,13 @@ if (!$pdo) {
 }
 
 $errorMessage = '';
+$successMessage = '';
 $csrfToken = csrf_token();
+
+if (isset($_SESSION['register_success'])) {
+    $successMessage = (string)$_SESSION['register_success'];
+    unset($_SESSION['register_success']);
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!hash_equals($_SESSION['csrf'] ?? '', (string)($_POST['csrf'] ?? ''))) {
@@ -240,12 +246,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         ]);
                     }
 
-                    if (in_array('admin', $roles, true) || $_SESSION['auth']['manv'] !== null) {
+                    $isAdmin = in_array('admin', $roles, true);
+                    $isStaff = in_array('staff', $roles, true);
+
+                    if ($isAdmin || $isStaff) {
                         header('Location: /Pharmacy-management/admin/');
                         exit;
                     }
 
-                    header('Location: /');
+                    header('Location: /Pharmacy-management/');
                     exit;
                 }
             }
@@ -522,6 +531,10 @@ PHẦN NỘI DUNG FORM ĐĂNG NHẬP
         <?php if ($errorMessage !== ''): ?>
             <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 <?php echo htmlspecialchars($errorMessage); ?>
+            </div>
+        <?php elseif ($successMessage !== ''): ?>
+            <div class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                <?php echo htmlspecialchars($successMessage); ?>
             </div>
         <?php endif; ?>
 
