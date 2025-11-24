@@ -156,6 +156,38 @@ render_pills_effect_assets();
 <style>
 /* Hard kill mini-cart on big cart page */
 #mini-cart, .mini-cart, .header-cart-popover { display:none !important; }
+/* BẮT BUỘC XÓA DẤU CHẤM */
+ul.user-menu-list, 
+.user-dropdown-menu ul {
+    list-style-type: none !important; /* Xóa dấu chấm */
+    padding-left: 0 !important;       /* Xóa lùi đầu dòng mặc định */
+    margin: 0 !important;
+}
+
+/* Đảm bảo thẻ li cũng không hiện dấu */
+ul.user-menu-list li,
+.user-dropdown-menu li {
+    list-style: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Style cho thẻ A bên trong */
+ul.user-menu-list li a {
+    display: flex !important;
+    align-items: center;
+    padding: 10px 15px !important;
+    text-decoration: none !important;
+    color: #333;
+    font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+ul.user-menu-list li a:hover {
+    background-color: #f5f5f5 !important;
+    color: #004aad !important;
+}
 </style>
 <?php endif; ?>
 
@@ -192,17 +224,118 @@ render_pills_effect_assets();
             <?php if (!$isLogged): ?>
                 <a href="<?= $base_url ?>/login.php"><i class="fas fa-user"></i> Đăng nhập</a>
                 <a href="<?= $base_url ?>/register.php"><i class="fas fa-user-plus"></i> Đăng ký</a>
-            <?php else: ?>
-                <span class="user-name"><i class="fas fa-user"></i> <?= htmlspecialchars($username ?? 'Tài khoản') ?></span>
-                <?php if ($isAdmin): ?>
-                    <a href="<?= $base_url ?>/admin/"><i class="fas fa-gauge-high"></i> Quản trị</a>
-                <?php endif; ?>
-                <form id="logout-form" action="<?= $base_url ?>/logout.php" method="POST" style="display:none;">
-                    <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
-                    <input type="hidden" name="r" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '') ?>">
-                </form>
-                <a href="#" data-logout-btn><i class="fas fa-sign-out-alt"></i> Đăng xuất</a>
-            <?php endif; ?>
+            
+   <?php else: ?>
+    <style>
+        .user-dropdown-menu {
+            display: none; /* Ẩn mặc định */
+            position: absolute;
+            top: 100%;
+            right: 0;
+            z-index: 9999;
+            padding-top: 10px;
+        }
+
+        /* Khi có class 'active' thì mới hiện */
+        .user-dropdown-wrapper.active .user-dropdown-menu {
+            display: block;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        /* Mũi tên xoay khi mở menu */
+        .user-dropdown-wrapper.active .arrow-icon {
+            transform: rotate(180deg);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+
+    <div class="user-dropdown-wrapper" style="position: relative; display: inline-block;">
+        
+        <div class="user-trigger" onclick="toggleUserMenu(event)" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500; cursor: pointer; padding: 10px 0;">
+            <i class="fas fa-user-circle" style="font-size: 20px; color: #555;"></i>
+            <span style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                <?= htmlspecialchars($username ?? 'Khách hàng') ?>
+            </span>
+            <i class="fas fa-chevron-down arrow-icon" style="font-size: 12px; color: #777; transition: transform 0.2s;"></i>
+        </div>
+
+        <div class="user-dropdown-menu">
+            <div style="background: #fff; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.15); border: 1px solid #eee; overflow: hidden; min-width: 240px;">
+                
+                <div style="padding: 12px 16px; background: #f8f9fa; border-bottom: 1px solid #eee; font-size: 14px; color: #333;">
+                    Xin chào, <strong style="color: #004aad;"><?= htmlspecialchars($username) ?></strong>
+                </div>
+
+                <ul style="list-style: none !important; padding: 0 !important; margin: 0 !important;">
+                    <li style="list-style: none !important; margin: 0;">
+                        <a href="<?= $base_url ?>/base.php?page=profile" style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: #444; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='#f0f8ff'; this.style.color='#004aad'" onmouseout="this.style.background='transparent'; this.style.color='#444'">
+                            <i class="fas fa-id-card" style="width: 20px; text-align: center;"></i> Thông tin tài khoản
+                        </a>
+                    </li>
+
+                    <li style="list-style: none !important; margin: 0;">
+                        <a href="<?= $base_url ?>/base.php?page=profile&action=edit" style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: #444; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='#f0f8ff'; this.style.color='#004aad'" onmouseout="this.style.background='transparent'; this.style.color='#444'">
+                            <i class="fas fa-user-edit" style="width: 20px; text-align: center;"></i> Cập nhật thông tin
+                        </a>
+                    </li>
+
+                    <li style="list-style: none !important; margin: 0;">
+                        <a href="<?= $base_url ?>/base.php?page=my_orders" style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: #444; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='#f0f8ff'; this.style.color='#004aad'" onmouseout="this.style.background='transparent'; this.style.color='#444'">
+                            <i class="fas fa-clipboard-list" style="width: 20px; text-align: center;"></i> Đơn hàng của tôi
+                        </a>
+                    </li>
+
+                    <?php if ($isAdmin): ?>
+                    <li style="list-style: none !important; margin: 0;">
+                        <a href="<?= $base_url ?>/admin/" style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: #d9534f; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='#fff5f5'" onmouseout="this.style.background='transparent'">
+                            <i class="fas fa-gauge-high" style="width: 20px; text-align: center;"></i> Quản trị hệ thống
+                        </a>
+                    </li>
+                    <?php endif; ?>
+
+                    <li style="height: 1px; background: #eee; margin: 4px 0; list-style: none !important;"></li>
+
+                    <li style="list-style: none !important; margin: 0;">
+                        <a href="#" data-logout-btn style="display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: #d9534f; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='#fff5f5'" onmouseout="this.style.background='transparent'">
+                            <i class="fas fa-sign-out-alt" style="width: 20px; text-align: center;"></i> Đăng xuất
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <form id="logout-form" action="<?= $base_url ?>/logout.php" method="POST" style="display:none;">
+        <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf']) ?>">
+        <input type="hidden" name="r" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '') ?>">
+    </form>
+
+    <script>
+        function toggleUserMenu(e) {
+            // Ngăn không cho sự kiện click lan ra ngoài ngay lập tức
+            e.stopPropagation();
+            
+            // Tìm element cha và toggle class 'active'
+            const wrapper = document.querySelector('.user-dropdown-wrapper');
+            if (wrapper) {
+                wrapper.classList.toggle('active');
+            }
+        }
+
+        // Lắng nghe sự kiện click bất kỳ đâu trên trang web
+        document.addEventListener('click', function(e) {
+            const wrapper = document.querySelector('.user-dropdown-wrapper');
+            // Nếu click ra ngoài vùng menu thì đóng lại
+            if (wrapper && !wrapper.contains(e.target)) {
+                wrapper.classList.remove('active');
+            }
+        });
+    </script>
+<?php endif; ?>
             
             <!-- GIỎ HÀNG MINI -->
             <div class="cart-wrapper">

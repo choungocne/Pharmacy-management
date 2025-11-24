@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], JSON_UNESCAPED_UNICODE);
 
             // --- B. INSERT VÀO BẢNG `donhang` ---
-            $makh = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : null;
+            $makh = $_SESSION['auth']['makh'] ?? ($_SESSION['makh'] ?? null);
 
             $sqlInsert = "INSERT INTO donhang (ngaytao, makh, giagiam, TrangThai, chitiet, payment, shipment, phiship) 
                           VALUES (NOW(), :makh, 0, 'Chờ xác nhận', :chitiet, :payment, :shipment, :phiship)";
