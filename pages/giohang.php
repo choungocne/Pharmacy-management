@@ -442,21 +442,28 @@ $base_url = '/Pharmacy-management';
                                 Địa chỉ nhận hàng
                             </h2>
 
+                            <!-- Nút sao chép thông tin người đặt -->
+                            <div class="flex items-center justify-end mb-3">
+                                <button id="btn-copy-buyer" type="button" class="px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm" style="background-color: var(--primary-color);">
+                                    <i class="fas fa-clone mr-2"></i> Sao chép thông tin người đặt
+                                </button>
+                            </div>
+
                             <!-- "Trước sáp nhập" / "Sau sáp nhập" -->
                             
 
                             <!-- Form địa chỉ - BỌC LẠI BẰNG ID "form-truoc-sap-nhap" -->
                             <div class="space-y-4" id="form-truoc-sap-nhap">
-                               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Họ và tên người nhận</label>
-                                        <input type="text" placeholder="Nguyễn Văn B" class="login-input">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
-                                        <input type="text" placeholder="09xxxxxxxx" class="login-input">
-                                    </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Họ và tên người nhận</label>
+                                    <input type="text" id="ship-name-old" placeholder="Nguyễn Văn B" class="login-input">
                                 </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+                                    <input type="text" id="ship-phone-old" placeholder="09xxxxxxxx" class="login-input">
+                                </div>
+                            </div>
                                 
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div>
@@ -951,6 +958,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Lấy dữ liệu giỏ hàng từ PHP (Đã bao gồm tensp, giaban)
     const cartRows = <?= json_encode($cart_rows ?? [], JSON_UNESCAPED_UNICODE) ?>;
     const btnCheckout = document.getElementById('btn-checkout');
+    const btnCopyBuyer = document.getElementById('btn-copy-buyer');
+    const buyerName = document.getElementById('buyer-name');
+    const buyerPhone = document.getElementById('buyer-phone');
+    const shipNameOld = document.getElementById('ship-name-old');
+    const shipPhoneOld = document.getElementById('ship-phone-old');
+    const shipAddressOld = document.getElementById('ship-address-old');
 
     btnCheckout.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1011,6 +1024,20 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCheckout.disabled = true;
         document.getElementById('hidden-checkout-form').submit();
     });
+
+    // Sao chép thông tin người đặt xuống địa chỉ nhận hàng
+    if (btnCopyBuyer) {
+        btnCopyBuyer.addEventListener('click', () => {
+            if (buyerName && shipNameOld) shipNameOld.value = buyerName.value;
+            if (buyerPhone && shipPhoneOld) shipPhoneOld.value = buyerPhone.value;
+            // Sao chép luôn địa chỉ nếu đã nhập
+            const buyerAddr = document.getElementById('ship-address-old');
+            const shipAddr = document.getElementById('ship-address-old');
+            if (buyerAddr && shipAddr && buyerAddr.value) {
+                shipAddr.value = buyerAddr.value;
+            }
+        });
+    }
 });
 </script>
 

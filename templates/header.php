@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const BASE_URL = '<?= $base_url ?>';
     const cartWrapper = document.querySelector('.cart-wrapper');
     const cartBody = cartWrapper?.querySelector('.cart-dropdown-body');
-    const cartSummary = cartWrapper?.querySelector('.cart-summary');
+    let cartSummary = cartWrapper?.querySelector('.cart-summary');
     const badgeHost = cartWrapper?.querySelector('.cart-trigger');
     const emptyHtml = `
         <div class="cart-empty">
@@ -630,13 +630,36 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function ensureCartSummary() {
+        if (cartSummary) return cartSummary;
+        const container = document.createElement('div');
+        container.className = 'cart-dropdown-footer';
+        const summary = document.createElement('div');
+        summary.className = 'cart-summary';
+        const countEl = document.createElement('span');
+        countEl.className = 'cart-total-items';
+        const link = document.createElement('a');
+        link.className = 'btn-view-cart';
+        link.href = `${BASE_URL}/pages/giohang.php#`;
+        link.textContent = 'Xem giỏ hàng';
+        summary.appendChild(countEl);
+        summary.appendChild(link);
+        container.appendChild(summary);
+        // append after body
+        cartBody?.parentElement?.appendChild(container);
+        cartSummary = summary;
+        return cartSummary;
+    }
+
     function renderMiniCart(items, totalCount) {
         if (!cartBody) return;
         if (!items || !items.length) {
             cartBody.innerHTML = emptyHtml;
-            if (cartSummary) {
-                const countEl = cartSummary.querySelector('.cart-total-items');
+            if (cartSummary || cartWrapper?.querySelector('.cart-dropdown-footer')) {
+                const cs = ensureCartSummary();
+                const countEl = cs?.querySelector('.cart-total-items');
                 if (countEl) countEl.textContent = '0 sản phẩm';
+                cs?.parentElement?.classList.add('hidden');
             }
             setBadge(0);
             return;
@@ -671,8 +694,10 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
         }).join('');
 
-        if (cartSummary) {
-            const countEl = cartSummary.querySelector('.cart-total-items');
+        const cs = ensureCartSummary();
+        if (cs) {
+            cs.parentElement?.classList.remove('hidden');
+            const countEl = cs.querySelector('.cart-total-items');
             if (countEl) countEl.textContent = `${totalCount ?? items.length} sản phẩm`;
         }
         setBadge(totalCount ?? items.length);

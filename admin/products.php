@@ -1,4 +1,5 @@
 <?php
+// include("define.php");
 // admin/products.php - API-backed product management
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
@@ -27,8 +28,8 @@ foreach ([__DIR__ . '/../db.php', __DIR__ . '/db.php'] as $try) {
   if (file_exists($try)) { require $try; break; }
 }
 if (!isset($pdo) || !($pdo instanceof PDO)) {
-  $dsn='mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4';
-  $pdo=new PDO($dsn,'root','',[
+  $dsn='mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4';
+  $pdo=new PDO($dsn,DB_USER,DB_PASS,[
     PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
   ]);
@@ -45,7 +46,7 @@ $page         = max(1,(int)($_GET['page'] ?? 1));
 
 // Hàm gọi API
 function callAPI($endpoint, $params = []) {
-  $baseURL = 'http://localhost/pharmacy-management/api/api_products.php';
+  $baseURL = 'http://localhost/Pharmacy-management/api/api_products.php';
   $url = $baseURL . $endpoint;
   if (!empty($params)) {
     $url .= '?' . http_build_query($params);
