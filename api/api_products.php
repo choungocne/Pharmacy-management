@@ -3,6 +3,22 @@ declare(strict_types=1);
 // api/products.php
 // Include db.php để sử dụng hàm pdo()
 require_once __DIR__ . '/../db.php';
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+
+$auth = $_SESSION['auth'] ?? null;
+$roles = [];
+if (is_array($auth) && isset($auth['roles'])) {
+    $roles = is_array($auth['roles']) ? $auth['roles'] : json_decode((string)$auth['roles'], true);
+    if (!is_array($roles)) {
+        $roles = [];
+    }
+}
+$isAdmin = in_array('admin', $roles, true);
+$isStaff = in_array('staff', $roles, true);
+$canCreate = $isAdmin || $isStaff;
+$canWrite = $isAdmin;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -39,6 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['id'])) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['id'])) {
+  if (!$canWrite) {
+    $respond(['ok' => false, 'message' => 'Forbidden'], 403);
+  }
   $id = (int)$_GET['id'];
   if ($id <= 0) {
     $respond(['ok'=>false,'message'=>'ID không hợp lệ'],400);
@@ -143,6 +162,10 @@ switch ($method) {
     break;
 
   case 'POST':
+    if (!$canCreate) {
+      echo json_encode(['error' => 'Forbidden']);
+      exit;
+    }
     // Create product
     $data = json_decode(file_get_contents('php://input'), true);
     if (!$data) {
@@ -185,6 +208,10 @@ switch ($method) {
     break;
 
   case 'PUT':
+    if (!$canWrite) {
+      echo json_encode(['error' => 'Forbidden']);
+      exit;
+    }
     if (!$id) {
       echo json_encode(['error' => 'ID required for update']);
       exit;
@@ -220,6 +247,10 @@ switch ($method) {
     break;
 
   case 'DELETE':
+    if (!$canWrite) {
+      echo json_encode(['error' => 'Forbidden']);
+      exit;
+    }
     if (!$id) {
       echo json_encode(['error' => 'ID required for delete']);
       exit;
