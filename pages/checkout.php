@@ -14,41 +14,34 @@ try {
     die("Lỗi kết nối: " . $e->getMessage());
 }
 
-// 2. LẤY DỮ LIỆU NGÂN HÀNG TỪ SQL
-// ------------------------------------------------------------------
-$bankDataForJS = []; // Dữ liệu để validate bằng JS
-$banksList = [];     // Dữ liệu để hiển thị HTML
+// 2. LẤY DỮ LIỆU NGÂN HÀNG (Giữ nguyên)
+$bankDataForJS = []; 
+$banksList = [];     
 
 try {
     $stmt = $conn->query("SELECT * FROM taikhoanhethong WHERE TrangThai = 'HoatDong'");
     $rawBanks = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     foreach($rawBanks as $b) {
-        // Xử lý đường dẫn ảnh
         $logoUrl = $b['Logo'];
         if (!empty($logoUrl) && strpos($logoUrl, 'http') === false) {
             $logoUrl = '/Pharmacy-management/' . ltrim($logoUrl, '/');
         }
-
-        // List hiển thị
         $banksList[] = [
             'code' => $b['NganHang'],
             'name' => $b['NganHang'],
             'logo' => $logoUrl
         ];
-
-        // List dữ liệu thật để Validate
-        // Key là Mã Ngân Hàng (VD: Vietcombank)
         $bankDataForJS[$b['NganHang']] = [
-            'real_account' => $b['SoTaiKhoan'],  // Số TK thật
-            'holder_name'  => $b['ChuTaiKhoan']  // Tên chủ TK thật
+            'real_account' => $b['SoTaiKhoan'],
+            'holder_name'  => $b['ChuTaiKhoan']
         ];
     }
 } catch (Exception $e) { 
     $banksList = [];
 }
 
-// 3. XỬ LÝ LOGIC TÍNH TIỀN TỪ SQL
+// 3. XỬ LÝ LOGIC TÍNH TIỀN VÀ LƯU SESSION
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fullname = $_POST['fullname'] ?? 'Khách lẻ';
     $phone = $_POST['phone'] ?? '';
@@ -57,18 +50,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Truy vấn lại giỏ hàng
     $sessionId = session_id();
-    $userId = $_SESSION['user']['id'] ?? null;
+    
+    // SỬA 1: Đồng bộ cách lấy ID khách hàng (giống otp.php)
+    $userId = $_SESSION['auth']['makh'] ?? ($_SESSION['makh'] ?? null);
+    
     $cartItems = [];
     
     try {
+        // SỬA 2: Lấy thêm cột masp và hinhsp để lưu snapshot
+        $cols = "gh.masp, gh.soluong, sp.tensp, sp.giaban, sp.hinhsp";
+        
         if ($userId) {
-            $sql = "SELECT gh.soluong, sp.giaban, sp.tensp 
-                    FROM giohang gh JOIN sanpham sp ON gh.masp = sp.masp WHERE gh.makh = :id";
+            $sql = "SELECT $cols FROM giohang gh JOIN sanpham sp ON gh.masp = sp.masp WHERE gh.makh = :id";
             $stmt = $conn->prepare($sql);
             $stmt->execute([':id' => $userId]);
         } else {
-            $sql = "SELECT gh.soluong, sp.giaban, sp.tensp 
-                    FROM giohang gh JOIN sanpham sp ON gh.masp = sp.masp WHERE gh.session_id = :id";
+            $sql = "SELECT $cols FROM giohang gh JOIN sanpham sp ON gh.masp = sp.masp WHERE gh.session_id = :id";
             $stmt = $conn->prepare($sql);
             $stmt->execute([':id' => $sessionId]);
         }
@@ -91,11 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $orderCode = 'DH' . time() . rand(10, 99);
 
+    // SỬA 3: Lưu cart_items và shipping_fee vào Session để file OTP dùng
     $_SESSION['current_transaction'] = [
-        'order_code' => $orderCode,
-        'amount' => $totalAmount,
-        'fullname' => $fullname,
-        'payment_method' => $paymentMethod
+        'order_code'     => $orderCode,
+        'amount'         => $totalAmount,
+        'fullname'       => $fullname,
+        'phone'          => $phone,        // Lưu thêm SĐT
+        'address'        => $address,      // Lưu thêm địa chỉ
+        'payment_method' => $paymentMethod,
+        'shipping_fee'   => $shippingFee,  // Lưu phí ship
+        'cart_items'     => $cartItems     // QUAN TRỌNG: Lưu danh sách sản phẩm
     ];
 } else {
     header("Location: giohang.php");
@@ -287,7 +289,6 @@ $actionUrl = "otp.php";
     </div>
 
     <script>
-        // Nhận dữ liệu từ PHP (Dữ liệu thật trong DB)
         const DB_DATA = <?= json_encode($bankDataForJS) ?>;
         
         const bankCodeInput = document.getElementById('selected-bank-code');
@@ -301,14 +302,12 @@ $actionUrl = "otp.php";
         const bankError = document.getElementById('bank-error');
 
         function selectBank(el, code) {
-            // Xử lý giao diện chọn
             document.querySelectorAll('.bank-item').forEach(item => item.classList.remove('selected'));
             el.classList.add('selected');
             
             bankCodeInput.value = code;
             if(bankError) bankError.innerText = '';
             
-            // Reset form khi đổi ngân hàng
             if(accInput) {
                 accInput.value = '';
                 accInput.focus();
@@ -324,7 +323,6 @@ $actionUrl = "otp.php";
             if(!accInput) return;
             
             const code = bankCodeInput.value;
-            // Xóa khoảng trắng thừa
             const inputVal = accInput.value.trim().replace(/\s/g, '');
             
             if (!code) {
@@ -335,29 +333,24 @@ $actionUrl = "otp.php";
                 if(bankError) bankError.innerText = '';
             }
 
-            // Hiển thị lên thẻ Napas (Nếu là Momo)
             if (cardDisplay) {
                 cardDisplay.innerText = inputVal.replace(/(\d{4})(?=\d)/g, '$1 ') || '**** **** **** ****';
             }
 
-            // --- LOGIC KIỂM TRA DỮ LIỆU THẬT ---
-            const bankInfo = DB_DATA[code]; // Lấy thông tin ngân hàng đã chọn
+            const bankInfo = DB_DATA[code];
             let isValid = false;
             let foundName = '';
 
             if (bankInfo) {
-                // CHỈ SO SÁNH VỚI DỮ LIỆU TRONG DB (real_account)
-                // KHÔNG CÒN 123456 NỮA
                 if (inputVal === bankInfo.real_account) {
                     isValid = true;
                     foundName = bankInfo.holder_name;
                 }
             }
 
-            // Kết quả
             if (isValid) {
                 holderInput.value = foundName;
-                finalHolderInput.value = foundName; // Lưu vào input ẩn để gửi đi
+                finalHolderInput.value = foundName;
                 
                 if (nameDisplay) nameDisplay.innerText = foundName;
                 
@@ -378,7 +371,6 @@ $actionUrl = "otp.php";
             }
         }
 
-        // Hiệu ứng nền
         document.addEventListener('DOMContentLoaded', () => {
             const canvas = document.getElementById('pills-canvas');
             if (canvas) {

@@ -245,7 +245,7 @@ require __DIR__ . '/partials/header.php';
               </div>
             </div>
             <div class="flex gap-2">
-              <a class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm" href="/Pharmacy-management/order_detail.php?sodh=<?=$o['sodh']?>">Xem</a>
+              <a class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm" href="/Pharmacy-management/admin/order_detail.php?sodh=<?=$o['sodh']?>">Xem</a>
               <a class="px-3 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm" href="#">In</a>
             </div>
           </div>
