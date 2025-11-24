@@ -8,8 +8,8 @@ foreach ([__DIR__ . '/../db.php', __DIR__ . '/db.php'] as $try) {
 }
 if (!isset($pdo) || !($pdo instanceof PDO)) {
   // fallback tuyệt đối nếu require không nạp được $pdo
-  $dsn  = 'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4';
-  $user = 'root'; $pass = '';
+  $dsn  = 'mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4';
+  $user = DB_USER; $pass = DB_PASS;
   $pdo  = new PDO($dsn, $user, $pass, [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,

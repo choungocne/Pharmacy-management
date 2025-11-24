@@ -91,8 +91,8 @@ if ($apiResponse && isset($apiResponse['data'])) {
   foreach ($rows as &$r) {
     $r['tendv'] = $r['donvitinh'] ?? ($r['tendv'] ?? '');
     $r['ton']   = (int)($r['tonkho'] ?? ($r['ton'] ?? 0));
-    $r['image'] = str_replace('/Pharmacy-management/','/pharmacy-management/',
-                 $r['hinhsp'] ?? ($r['image'] ?? '/pharmacy-management/uploads/sp/placeholder.jpg'));
+    $r['image'] = str_replace('/Pharmacy-management/','/Pharmacy-management/',
+                 $r['hinhsp'] ?? ($r['image'] ?? '/Pharmacy-management/uploads/sp/placeholder.jpg'));
     $r['sl_het_han']  = (int)($r['sl_het_han'] ?? 0);
     $r['hsd_gan_nhat'] = $r['hsd_gan_nhat'] ?? ((!empty($r['hsd']) && $r['ton']>0) ? $r['hsd'] : null);
   }
@@ -121,7 +121,7 @@ if ($apiResponse && isset($apiResponse['data'])) {
       sp.tensp,
       sp.giaban,
       REPLACE(COALESCE(sp.hinhsp,'/Pharmacy-management/uploads/sp/placeholder.jpg'),
-              '/Pharmacy-management/','/pharmacy-management/') AS image,
+              '/Pharmacy-management/','/Pharmacy-management/') AS image,
       dm.tendm,
       dv.tendv,
       /* Tổng SL hết hạn còn tồn */
@@ -281,7 +281,7 @@ function build_url($q,$dm,$page,$per){
                 <?php endif; ?>
               </div>
               <div class="mt-3 flex gap-2">
-                <a href="/pharmacy-management/admin/product_detail.php?masp=<?= (int)$r['masp'] ?>"
+                <a href="/Pharmacy-management/admin/product_detail.php?masp=<?= (int)$r['masp'] ?>"
                    class="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-sm transition">Xem</a>
                 <?php if ($isAdmin): ?>
                 <button type="button" data-edit-id="<?= (int)$r['masp'] ?>"
@@ -410,7 +410,7 @@ function build_url($q,$dm,$page,$per){
 <script>
 const IS_ADMIN = <?= $isAdmin ? 'true' : 'false' ?>;
 document.addEventListener('DOMContentLoaded', () => {
-  const API_URL = '/pharmacy-management/api/api_products.php';
+  const API_URL = '/Pharmacy-management/api/api_products.php';
   const modalEl = document.getElementById('productModal');
   const form = document.getElementById('productForm');
   if (!modalEl || !form) return;

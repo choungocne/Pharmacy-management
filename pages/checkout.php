@@ -1,13 +1,13 @@
 <?php
 // file: checkout.php
 session_start();
-include("db.php");
+include("../db.php");
 // 1. KẾT NỐI DATABASE
 try {
-    'mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4',
-        DB_USER,
-        DB_PASS,
-    $password = '';
+    $host = DB_HOST;
+    $dbname = DB_NAME;
+    $username = DB_USER;
+    $password = DB_PASS;
     $conn = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {

@@ -172,8 +172,8 @@ $ADMIN_TAB = $_GET['tab'] ?? 'product';
       <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <h1 class="text-3xl font-extrabold tracking-tight">
           <?= ($ADMIN_TAB === 'meta')
-                ? 'Qu?n l? danh m?c, th??ng hi?u v? ??n v? t?nh'
-                : 'Qu?n l? S?n ph?m' ?>
+                ? 'Quản lý danh mục, thương hiệu và đơn vị tính'
+                : 'Quản lý Sản phẩm' ?>
         </h1>
         <div class="flex gap-2 items-center">
         <button onclick="openAddModal()" class="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition flex items-center gap-2">

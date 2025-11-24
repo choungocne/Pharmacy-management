@@ -1,11 +1,22 @@
 <?php
 // pages/my_orders.php
+// Khởi động session và kết nối DB
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_set_cookie_params([
+        'httponly' => true,
+        'samesite' => 'Lax',
+        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'path' => '/',
+    ]);
+    session_start();
+}
+require_once __DIR__ . '/../db.php';
 
 // 1. KIỂM TRA ĐĂNG NHẬP
 if (empty($_SESSION['auth']) || empty($_SESSION['auth']['makh'])) {
     echo "<script>
         alert('Vui lòng đăng nhập để xem đơn hàng!');
-        window.location.href='login.php';
+        window.location.href='/Pharmacy-management/login.php';
     </script>";
     exit;
 }
