@@ -197,11 +197,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     try {
                         $pdo->beginTransaction(); // Bắt đầu giao dịch
 
-                        // 1. Thêm vào bảng khachhang trước
-                        // (Cột hoten, sdt, email, diachi để trống)
-                        $insertKH = $pdo->prepare("INSERT INTO khachhang (hoten, sdt, email, diachi) VALUES (?, ?, ?, '')");
-                        $insertKH->execute([$fullname, $phone, $email]);
-                        $newMakh = $pdo->lastInsertId(); // Lấy ID khách hàng vừa tạo
+                        // 1. Thêm vào bảng khachhang trước (bảng makh không auto increment)
+                        $nextIdStmt = $pdo->query("SELECT COALESCE(MAX(makh), 0) + 1 AS next_id FROM khachhang");
+                        $nextMakh = (int)$nextIdStmt->fetchColumn();
+                        $insertKH = $pdo->prepare("INSERT INTO khachhang (makh, hoten, sdt, email, diachi) VALUES (?, ?, ?, ?, '')");
+                        $insertKH->execute([$nextMakh, $fullname, $phone, $email]);
+                        $newMakh = $nextMakh; // ID khách hàng vừa tạo
 
                         // 2. Thêm vào bảng auth với makh vừa lấy được
                         $passwordHash = password_hash($password, PASSWORD_DEFAULT);

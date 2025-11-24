@@ -1,13 +1,13 @@
 <?php
 // file: otp.php
 session_start();
-
+include("../db.php");
 // 1. KẾT NỐI DATABASE (PDO)
 try {
-    $host = 'localhost';
-    $dbname = 'nhathuocantam';
-    $username = 'root';
-    $password = '';
+    $host = DB_HOST;
+    $dbname = DB_NAME;
+    $username = DB_USER;
+    $password = DB_PASS;
     $conn = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
@@ -69,19 +69,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // --- B. INSERT VÀO BẢNG `donhang` ---
             $makh = $_SESSION['auth']['makh'] ?? ($_SESSION['makh'] ?? null);
 
-            $sqlInsert = "INSERT INTO donhang (ngaytao, makh, giagiam, TrangThai, chitiet, payment, shipment, phiship) 
-                          VALUES (NOW(), :makh, 0, 'Chờ xác nhận', :chitiet, :payment, :shipment, :phiship)";
+            // Detect schema where `sodh` is not AUTO_INCREMENT to avoid "no default value" errors
+            $colInfo = $conn->query("SHOW COLUMNS FROM donhang LIKE 'sodh'")->fetch(PDO::FETCH_ASSOC);
+            $needsManualOrderId = !($colInfo && stripos($colInfo['Extra'] ?? '', 'auto_increment') !== false);
+            $manualOrderId = null;
+            if ($needsManualOrderId) {
+                $manualOrderId = (int) $conn->query("SELECT IFNULL(MAX(sodh), 0) + 1 AS next_id FROM donhang")->fetchColumn();
+            }
+
+            if ($needsManualOrderId) {
+                $sqlInsert = "INSERT INTO donhang (sodh, ngaytao, makh, giagiam, TrangThai, chitiet, payment, shipment, phiship) 
+                              VALUES (:sodh, NOW(), :makh, 0, 'Chờ xác nhận', :chitiet, :payment, :shipment, :phiship)";
+            } else {
+                $sqlInsert = "INSERT INTO donhang (ngaytao, makh, giagiam, TrangThai, chitiet, payment, shipment, phiship) 
+                              VALUES (NOW(), :makh, 0, 'Chờ xác nhận', :chitiet, :payment, :shipment, :phiship)";
+            }
             
-            $stmt = $conn->prepare($sqlInsert);
-            $stmt->execute([
+            $params = [
                 ':makh'     => $makh,
                 ':chitiet'  => $jsonChiTiet,
                 ':payment'  => $jsonPayment,
                 ':shipment' => $jsonShipment,
                 ':phiship'  => $trans['shipping_fee'] ?? 0
-            ]);
+            ];
+            if ($needsManualOrderId) {
+                $params[':sodh'] = $manualOrderId;
+            }
 
-            $newOrderId = $conn->lastInsertId(); // Lấy ID đơn hàng vừa tạo
+            $stmt = $conn->prepare($sqlInsert);
+            $stmt->execute($params);
+
+            $newOrderId = $needsManualOrderId ? $manualOrderId : $conn->lastInsertId(); // L?y ID don h?ng v?a t?o
+
 
             // --- C. XÓA GIỎ HÀNG CŨ ---
             $sessionId = session_id();
