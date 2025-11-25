@@ -47,7 +47,7 @@
                 echo '<img src="' . htmlspecialchars($disease['img_url']) . '" alt="' . htmlspecialchars($disease['tenbenh']) . '">';
                 echo '<h4>' . htmlspecialchars($disease['tenbenh']) . '</h4>';
                 echo '<p>' . substr(htmlspecialchars($disease['mota']), 0, 100) . '...</p>';
-                echo '<a href="chi-tiet-benh.php?mabenh=' . $disease['mabenh'] . '">Tìm hiểu thêm →</a>';
+                echo '<a href=#>Tìm hiểu thêm →</a>';
                 echo '</div>';
             }
             echo '</div>';

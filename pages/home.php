@@ -271,11 +271,11 @@ try {
                              alt="Đăng ký khám sức khỏe sàng lọc miễn phí" class="desktop-img">
                 </div>
 
-                <!-- Slide 3 -->
+                <!-- Slide 3
                 <div class="carousel-slide">
                         <img src="static/img/D_Herobanner.webp"
                              alt="Chăm sóc chính mình mỗi ngày đẹp xinh" class="desktop-img">
-                </div>
+                </div> -->
             </div>
 
             <!-- Navigation buttons -->
@@ -344,29 +344,12 @@ try {
             </div>
 
             <!-- Side Banners -->
-            <div class="side-banners">
-                <a href="https://nhathuoclongchau.com.vn/chuyen-trang-ung-thu" class="side-banner">
-                    <img src="static/img/banner/Banner_Ung_Thu_1_185705d391.webp"
-                         alt="Chuyên trang ung thư">
-                </a>
-                <a href="https://nhathuoclongchau.com.vn/tra-cuu/dia-chinh-moi" class="side-banner">
-                    <img src="static/img/banner/Banner_H2_2893cabcaa.webp"
-                         alt="Địa chỉ mới">
-                </a>
-            </div>
+           
         </div>
     </div>
 </section>
 
-<section class="container-custom" style="margin-top: 30px; margin-bottom: 50px;">
-    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-        <div style="border-radius: 12px; overflow: hidden;"><img src="static/img/banner/D_H1_Desktop_1200x367_0a2663616c.webp" style="width:100%; height:100%; object-fit:cover;"></div>
-        <div style="display: flex; flex-direction: column; gap: 20px;">
-            <div style="border-radius: 12px; overflow: hidden;"><img src="static/img/banner/Banner_Ung_Thu_1_185705d391.webp" style="width:100%;"></div>
-            <div style="border-radius: 12px; overflow: hidden;"><img src="static/img/banner/Banner_H2_2893cabcaa.webp" style="width:100%;"></div>
-        </div>
-    </div>
-</section>
+
 
 <div class="container-custom">
     <section class="deal-section">
