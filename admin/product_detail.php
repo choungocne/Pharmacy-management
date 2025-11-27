@@ -46,7 +46,7 @@ $stockStmt->execute([':id' => $masp]);
 $lots = $stockStmt->fetchAll();
 
 // Xử lý hình ảnh
-$image = $product['hinhsp'] ?: '/pharmacy-management/uploads/sp/placeholder.jpg';
+$image = $product['hinhsp'] ?: '/Pharmacy-management/uploads/sp/placeholder.jpg';
 $image = str_replace('/Pharmacy-management/', '/pharmacy-management/', $image);
 
 // Helper format tiền

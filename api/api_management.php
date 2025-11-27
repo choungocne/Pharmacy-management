@@ -5,9 +5,9 @@ header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 $pdo = new PDO(
-    'mysql:host=localhost;dbname=nhathuocantam;charset=utf8mb4',
-    'root',
-    '',
+    'mysql:host='.DB_HOST.';dbname='.DB_NAME.';charset=utf8mb4',
+        DB_USER,
+        DB_PASS,
     [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
